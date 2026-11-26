@@ -1,0 +1,276 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "SiteConfig",
+      "description": "Complete personal brand configuration for draft and published states.",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "heroHeading": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "tagline": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "profession": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "location": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "heroDescription": { "type": "string", "minLength": 10, "maxLength": 500 },
+        "heroPortraitUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "heroPrimaryCtaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "heroPrimaryCtaUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "heroSecondaryCtaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "heroSecondaryCtaUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "aboutHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "aboutParagraphs": { "type": "array" },
+        "aboutExperience": { "type": "array" },
+        "aboutWorkspaceUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "businessHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "businessName": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "businessRegistration": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "businessIndustry": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "businessDescription": { "type": "string", "minLength": 10, "maxLength": 600 },
+        "businessWebsiteUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
+        "businessLogoUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "businessShowcaseUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "businessServices": { "type": "array" },
+        "connectHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "connectDescription": { "type": "string", "minLength": 10, "maxLength": 500 },
+        "publicEmail": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 160,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
+        "tiktokUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
+        "instagramUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
+        "linkedinUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
+        "facebookUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
+        "customSocialLinks": { "type": "array" },
+        "welcomeEnabled": { "type": "boolean" },
+        "welcomeName": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "welcomeTagline": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "welcomeDurationMs": { "type": "number" },
+        "welcomeBgColor": {
+          "type": "string",
+          "minLength": 7,
+          "maxLength": 7,
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "welcomeStyle": {
+          "type": "string",
+          "enum": ["cinematic", "editorial", "minimal"]
+        },
+        "seoTitle": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "seoDescription": { "type": "string", "minLength": 10, "maxLength": 320 },
+        "seoKeywords": { "type": "string", "minLength": 0, "maxLength": 400 },
+        "seoOgImageUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "seoFaviconUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "footerDescription": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "footerCopyright": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "sectionVisibility": { "type": "object" },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "brandName",
+        "heroHeading",
+        "tagline",
+        "profession",
+        "location",
+        "heroDescription",
+        "heroPortraitUrl",
+        "heroPrimaryCtaLabel",
+        "heroPrimaryCtaUrl",
+        "heroSecondaryCtaLabel",
+        "heroSecondaryCtaUrl",
+        "aboutHeading",
+        "aboutParagraphs",
+        "aboutExperience",
+        "aboutWorkspaceUrl",
+        "businessHeading",
+        "businessName",
+        "businessRegistration",
+        "businessIndustry",
+        "businessDescription",
+        "businessWebsiteUrl",
+        "businessLogoUrl",
+        "businessShowcaseUrl",
+        "businessServices",
+        "connectHeading",
+        "connectDescription",
+        "publicEmail",
+        "tiktokUrl",
+        "instagramUrl",
+        "linkedinUrl",
+        "facebookUrl",
+        "customSocialLinks",
+        "welcomeEnabled",
+        "welcomeName",
+        "welcomeTagline",
+        "welcomeDurationMs",
+        "welcomeBgColor",
+        "welcomeStyle",
+        "seoTitle",
+        "seoDescription",
+        "seoKeywords",
+        "seoOgImageUrl",
+        "seoFaviconUrl",
+        "footerDescription",
+        "footerCopyright",
+        "sectionVisibility",
+        "updatedByUid",
+        "updatedAt"
+      ]
+    },
+    "JourneyStage": {
+      "title": "JourneyStage",
+      "description": "Milestone card in Mehmood Farooq's career timeline.",
+      "type": "object",
+      "properties": {
+        "step": { "type": "string", "minLength": 1, "maxLength": 10 },
+        "order": { "type": "number" },
+        "dateLabel": { "type": "string", "minLength": 0, "maxLength": 60 },
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "imageUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "isPublished": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "step",
+        "order",
+        "dateLabel",
+        "title",
+        "description",
+        "imageUrl",
+        "isPublished",
+        "updatedByUid",
+        "updatedAt"
+      ]
+    },
+    "PrincipleItem": {
+      "title": "PrincipleItem",
+      "description": "Core business and personal principle card.",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string", "minLength": 1, "maxLength": 10 },
+        "order": { "type": "number" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "summary": { "type": "string", "minLength": 5, "maxLength": 400 },
+        "isPublished": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "number",
+        "order",
+        "title",
+        "summary",
+        "isPublished",
+        "updatedByUid",
+        "updatedAt"
+      ]
+    },
+    "MediaItem": {
+      "title": "MediaItem",
+      "description": "Admin-managed media asset in the Photo & Media Library.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 0, "maxLength": 400 },
+        "category": {
+          "type": "string",
+          "enum": ["profile", "hero", "about", "journey", "business", "seo", "general"]
+        },
+        "url": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "mimeType": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "width": { "type": "number" },
+        "height": { "type": "number" },
+        "sizeBytes": { "type": "number" },
+        "uploadedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "title",
+        "description",
+        "category",
+        "url",
+        "mimeType",
+        "width",
+        "height",
+        "sizeBytes",
+        "uploadedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "SiteVersion": {
+      "title": "SiteVersion",
+      "description": "Immutable snapshot of published site configuration for version restore.",
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "maxLength": 140 },
+        "snapshot": { "type": "object" },
+        "createdByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["label", "snapshot", "createdByUid", "createdAt"]
+    },
+    "BusinessInquiry": {
+      "title": "BusinessInquiry",
+      "description": "Private business inquiry submitted by a visitor and readable only by the verified administrator.",
+      "type": "object",
+      "properties": {
+        "senderName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "senderEmail": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 160,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
+        "company": { "type": "string", "minLength": 0, "maxLength": 140 },
+        "subject": { "type": "string", "minLength": 2, "maxLength": 160 },
+        "message": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "status": { "type": "string", "enum": ["new", "reviewed", "archived"] },
+        "adminNotes": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "senderName",
+        "senderEmail",
+        "company",
+        "subject",
+        "message",
+        "status",
+        "adminNotes",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/siteConfig/{docId}": {
+      "schema": { "$ref": "#/entities/SiteConfig" },
+      "description": "Stores live 'public' site configuration (publicly readable) and 'draft' working state (admin only)."
+    },
+    "/journeyStages/{stageId}": {
+      "schema": { "$ref": "#/entities/JourneyStage" },
+      "description": "Stores career timeline entries with dates, images, and ordering."
+    },
+    "/principles/{principleId}": {
+      "schema": { "$ref": "#/entities/PrincipleItem" },
+      "description": "Stores core executive principles."
+    },
+    "/mediaItems/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaItem" },
+      "description": "Admin-only Photo and Media Library collection storing optimized asset metadata and URLs."
+    },
+    "/siteVersions/{versionId}": {
+      "schema": { "$ref": "#/entities/SiteVersion" },
+      "description": "Admin-only version history snapshots for restoring previous published states."
+    },
+    "/inquiries/{inquiryId}": {
+      "schema": { "$ref": "#/entities/BusinessInquiry" },
+      "description": "Stores visitor inquiries with strict PII isolation to the administrator."
+    }
+  }
+}

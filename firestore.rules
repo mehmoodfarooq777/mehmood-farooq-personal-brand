@@ -1,0 +1,557 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Shared Hardened Primitives
+    // -------------------------------------------------------------------------
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && request.auth.token.email_verified == true
+        && request.auth.token.email == 'mehmoodfarooq789@gmail.com';
+    }
+
+    function isValidEmail(email) {
+      return email is string
+        && email.size() >= 5
+        && email.size() <= 160
+        && email.matches('^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$');
+    }
+
+    function isValidString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    function isValidSectionVisibility(vis) {
+      return vis is map
+        && vis.keys().hasAll(['about', 'journey', 'business', 'principles', 'connect'])
+        && vis.keys().hasOnly(['about', 'journey', 'business', 'principles', 'connect'])
+        && vis.about is bool
+        && vis.journey is bool
+        && vis.business is bool
+        && vis.principles is bool
+        && vis.connect is bool;
+    }
+
+    // -------------------------------------------------------------------------
+    // Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidSiteConfig(data) {
+      return data.keys().hasAll([
+          'brandName',
+          'heroHeading',
+          'tagline',
+          'profession',
+          'location',
+          'heroDescription',
+          'heroPortraitUrl',
+          'heroPrimaryCtaLabel',
+          'heroPrimaryCtaUrl',
+          'heroSecondaryCtaLabel',
+          'heroSecondaryCtaUrl',
+          'aboutHeading',
+          'aboutParagraphs',
+          'aboutExperience',
+          'aboutWorkspaceUrl',
+          'businessHeading',
+          'businessName',
+          'businessRegistration',
+          'businessIndustry',
+          'businessDescription',
+          'businessWebsiteUrl',
+          'businessLogoUrl',
+          'businessShowcaseUrl',
+          'businessServices',
+          'connectHeading',
+          'connectDescription',
+          'publicEmail',
+          'tiktokUrl',
+          'instagramUrl',
+          'linkedinUrl',
+          'facebookUrl',
+          'customSocialLinks',
+          'welcomeEnabled',
+          'welcomeName',
+          'welcomeTagline',
+          'welcomeDurationMs',
+          'welcomeBgColor',
+          'welcomeStyle',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'seoOgImageUrl',
+          'seoFaviconUrl',
+          'footerDescription',
+          'footerCopyright',
+          'sectionVisibility',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'brandName',
+          'heroHeading',
+          'tagline',
+          'profession',
+          'location',
+          'heroDescription',
+          'heroPortraitUrl',
+          'heroPrimaryCtaLabel',
+          'heroPrimaryCtaUrl',
+          'heroSecondaryCtaLabel',
+          'heroSecondaryCtaUrl',
+          'aboutHeading',
+          'aboutParagraphs',
+          'aboutExperience',
+          'aboutWorkspaceUrl',
+          'businessHeading',
+          'businessName',
+          'businessRegistration',
+          'businessIndustry',
+          'businessDescription',
+          'businessWebsiteUrl',
+          'businessLogoUrl',
+          'businessShowcaseUrl',
+          'businessServices',
+          'connectHeading',
+          'connectDescription',
+          'publicEmail',
+          'tiktokUrl',
+          'instagramUrl',
+          'linkedinUrl',
+          'facebookUrl',
+          'customSocialLinks',
+          'welcomeEnabled',
+          'welcomeName',
+          'welcomeTagline',
+          'welcomeDurationMs',
+          'welcomeBgColor',
+          'welcomeStyle',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'seoOgImageUrl',
+          'seoFaviconUrl',
+          'footerDescription',
+          'footerCopyright',
+          'sectionVisibility',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && isValidString(data.brandName, 2, 100)
+        && isValidString(data.heroHeading, 2, 100)
+        && isValidString(data.tagline, 2, 140)
+        && isValidString(data.profession, 2, 160)
+        && isValidString(data.location, 2, 80)
+        && isValidString(data.heroDescription, 10, 500)
+        && isValidString(data.heroPortraitUrl, 1, 700000)
+        && isValidString(data.heroPrimaryCtaLabel, 1, 60)
+        && isValidString(data.heroPrimaryCtaUrl, 1, 300)
+        && isValidString(data.heroSecondaryCtaLabel, 1, 60)
+        && isValidString(data.heroSecondaryCtaUrl, 1, 300)
+        && isValidString(data.aboutHeading, 2, 140)
+        && data.aboutParagraphs is list
+        && data.aboutParagraphs.size() >= 1
+        && data.aboutParagraphs.size() <= 10
+        && data.aboutParagraphs[0] is string
+        && data.aboutParagraphs[0].size() <= 1200
+        && data.aboutExperience is list
+        && data.aboutExperience.size() <= 10
+        && (data.aboutExperience.size() == 0 || (data.aboutExperience[0] is map && data.aboutExperience[0].keys().hasOnly(['role', 'organization', 'period', 'summary'])))
+        && isValidString(data.aboutWorkspaceUrl, 1, 700000)
+        && isValidString(data.businessHeading, 2, 140)
+        && isValidString(data.businessName, 2, 140)
+        && isValidString(data.businessRegistration, 2, 120)
+        && isValidString(data.businessIndustry, 2, 120)
+        && isValidString(data.businessDescription, 10, 600)
+        && isValidString(data.businessWebsiteUrl, 8, 300)
+        && isValidString(data.businessLogoUrl, 0, 700000)
+        && isValidString(data.businessShowcaseUrl, 1, 700000)
+        && data.businessServices is list
+        && data.businessServices.size() <= 12
+        && (data.businessServices.size() == 0 || (data.businessServices[0] is map && data.businessServices[0].keys().hasOnly(['title', 'description'])))
+        && isValidString(data.connectHeading, 2, 140)
+        && isValidString(data.connectDescription, 10, 500)
+        && isValidEmail(data.publicEmail)
+        && isValidString(data.tiktokUrl, 8, 300)
+        && isValidString(data.instagramUrl, 8, 300)
+        && isValidString(data.linkedinUrl, 8, 300)
+        && isValidString(data.facebookUrl, 8, 300)
+        && data.customSocialLinks is list
+        && data.customSocialLinks.size() <= 8
+        && (data.customSocialLinks.size() == 0 || (data.customSocialLinks[0] is map && data.customSocialLinks[0].keys().hasOnly(['label', 'url'])))
+        && data.welcomeEnabled is bool
+        && isValidString(data.welcomeName, 2, 100)
+        && isValidString(data.welcomeTagline, 2, 140)
+        && (data.welcomeDurationMs is int || data.welcomeDurationMs is float)
+        && data.welcomeDurationMs >= 2000
+        && data.welcomeDurationMs <= 6000
+        && isValidString(data.welcomeBgColor, 7, 7)
+        && data.welcomeBgColor.matches('^#[0-9A-Fa-f]{6}$')
+        && data.welcomeStyle in ['cinematic', 'editorial', 'minimal']
+        && isValidString(data.seoTitle, 2, 160)
+        && isValidString(data.seoDescription, 10, 320)
+        && isValidString(data.seoKeywords, 0, 400)
+        && isValidString(data.seoOgImageUrl, 0, 700000)
+        && isValidString(data.seoFaviconUrl, 0, 700000)
+        && isValidString(data.footerDescription, 0, 300)
+        && isValidString(data.footerCopyright, 2, 160)
+        && isValidSectionVisibility(data.sectionVisibility)
+        && isValidString(data.updatedByUid, 1, 128)
+        && data.updatedByUid == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    function isValidJourneyStage(data) {
+      return data.keys().hasAll([
+          'step',
+          'order',
+          'dateLabel',
+          'title',
+          'description',
+          'imageUrl',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'step',
+          'order',
+          'dateLabel',
+          'title',
+          'description',
+          'imageUrl',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && isValidString(data.step, 1, 10)
+        && (data.order is int || data.order is float)
+        && data.order >= 0
+        && data.order <= 1000
+        && isValidString(data.dateLabel, 0, 60)
+        && isValidString(data.title, 2, 100)
+        && isValidString(data.description, 5, 500)
+        && isValidString(data.imageUrl, 0, 700000)
+        && data.isPublished is bool
+        && isValidString(data.updatedByUid, 1, 128)
+        && data.updatedByUid == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    function isValidPrinciple(data) {
+      return data.keys().hasAll([
+          'number',
+          'order',
+          'title',
+          'summary',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'number',
+          'order',
+          'title',
+          'summary',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ])
+        && isValidString(data.number, 1, 10)
+        && (data.order is int || data.order is float)
+        && data.order >= 0
+        && data.order <= 1000
+        && isValidString(data.title, 2, 100)
+        && isValidString(data.summary, 5, 400)
+        && data.isPublished is bool
+        && isValidString(data.updatedByUid, 1, 128)
+        && data.updatedByUid == request.auth.uid
+        && data.updatedAt == request.time;
+    }
+
+    function isValidMediaItem(data) {
+      return data.keys().hasAll([
+          'title',
+          'description',
+          'category',
+          'url',
+          'mimeType',
+          'width',
+          'height',
+          'sizeBytes',
+          'uploadedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'title',
+          'description',
+          'category',
+          'url',
+          'mimeType',
+          'width',
+          'height',
+          'sizeBytes',
+          'uploadedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidString(data.title, 1, 120)
+        && isValidString(data.description, 0, 400)
+        && data.category in ['profile', 'hero', 'about', 'journey', 'business', 'seo', 'general']
+        && isValidString(data.url, 1, 700000)
+        && isValidString(data.mimeType, 1, 80)
+        && (data.width is int || data.width is float)
+        && data.width >= 0
+        && (data.height is int || data.height is float)
+        && data.height >= 0
+        && (data.sizeBytes is int || data.sizeBytes is float)
+        && data.sizeBytes >= 0
+        && data.sizeBytes <= 750000
+        && isValidString(data.uploadedByUid, 1, 128)
+        && data.uploadedByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function isValidSiteVersion(data) {
+      return data.keys().hasAll(['label', 'snapshot', 'createdByUid', 'createdAt'])
+        && data.keys().hasOnly(['label', 'snapshot', 'createdByUid', 'createdAt'])
+        && isValidString(data.label, 1, 140)
+        && data.snapshot is map
+        && data.snapshot.keys().hasAll(['brandName', 'heroHeading', 'tagline', 'publicEmail'])
+        && isValidString(data.createdByUid, 1, 128)
+        && data.createdByUid == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    function isValidInquiry(data) {
+      return data.keys().hasAll([
+          'senderName',
+          'senderEmail',
+          'company',
+          'subject',
+          'message',
+          'status',
+          'adminNotes',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'senderName',
+          'senderEmail',
+          'company',
+          'subject',
+          'message',
+          'status',
+          'adminNotes',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidString(data.senderName, 2, 120)
+        && isValidEmail(data.senderEmail)
+        && isValidString(data.company, 0, 140)
+        && isValidString(data.subject, 2, 160)
+        && isValidString(data.message, 10, 2000)
+        && data.status in ['new', 'reviewed', 'archived']
+        && isValidString(data.adminNotes, 0, 1000)
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+
+    // Site configuration ('public' readable by visitors, 'draft' admin-only)
+    match /siteConfig/{docId} {
+      allow get: if isValidId(docId) && (docId == 'public' || (docId == 'draft' && isAdmin()));
+      allow list: if false;
+      allow create: if isAdmin()
+        && isValidId(docId)
+        && docId in ['public', 'draft']
+        && isValidSiteConfig(incoming());
+      allow update: if isAdmin()
+        && isValidId(docId)
+        && docId in ['public', 'draft']
+        && isValidSiteConfig(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'brandName',
+          'heroHeading',
+          'tagline',
+          'profession',
+          'location',
+          'heroDescription',
+          'heroPortraitUrl',
+          'heroPrimaryCtaLabel',
+          'heroPrimaryCtaUrl',
+          'heroSecondaryCtaLabel',
+          'heroSecondaryCtaUrl',
+          'aboutHeading',
+          'aboutParagraphs',
+          'aboutExperience',
+          'aboutWorkspaceUrl',
+          'businessHeading',
+          'businessName',
+          'businessRegistration',
+          'businessIndustry',
+          'businessDescription',
+          'businessWebsiteUrl',
+          'businessLogoUrl',
+          'businessShowcaseUrl',
+          'businessServices',
+          'connectHeading',
+          'connectDescription',
+          'publicEmail',
+          'tiktokUrl',
+          'instagramUrl',
+          'linkedinUrl',
+          'facebookUrl',
+          'customSocialLinks',
+          'welcomeEnabled',
+          'welcomeName',
+          'welcomeTagline',
+          'welcomeDurationMs',
+          'welcomeBgColor',
+          'welcomeStyle',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'seoOgImageUrl',
+          'seoFaviconUrl',
+          'footerDescription',
+          'footerCopyright',
+          'sectionVisibility',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    // Journey timeline stages
+    match /journeyStages/{stageId} {
+      allow get: if isValidId(stageId) && (existing().isPublished == true || isAdmin());
+      allow list: if existing().isPublished == true || isAdmin();
+      allow create: if isAdmin()
+        && isValidId(stageId)
+        && isValidJourneyStage(incoming());
+      allow update: if isAdmin()
+        && isValidId(stageId)
+        && isValidJourneyStage(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'step',
+          'order',
+          'dateLabel',
+          'title',
+          'description',
+          'imageUrl',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(stageId);
+    }
+
+    // Executive principles
+    match /principles/{principleId} {
+      allow get: if isValidId(principleId) && (existing().isPublished == true || isAdmin());
+      allow list: if existing().isPublished == true || isAdmin();
+      allow create: if isAdmin()
+        && isValidId(principleId)
+        && isValidPrinciple(incoming());
+      allow update: if isAdmin()
+        && isValidId(principleId)
+        && isValidPrinciple(incoming())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'number',
+          'order',
+          'title',
+          'summary',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(principleId);
+    }
+
+    // Photo and Media Library (admin-only management)
+    match /mediaItems/{mediaId} {
+      allow get: if isAdmin() && isValidId(mediaId);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(mediaId)
+        && isValidMediaItem(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(mediaId)
+        && isValidMediaItem(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().uploadedByUid == existing().uploadedByUid
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'description',
+          'category',
+          'url',
+          'mimeType',
+          'width',
+          'height',
+          'sizeBytes',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(mediaId);
+    }
+
+    // Version history snapshots (admin-only)
+    match /siteVersions/{versionId} {
+      allow get: if isAdmin() && isValidId(versionId);
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(versionId)
+        && isValidSiteVersion(incoming());
+      allow update: if false;
+      allow delete: if isAdmin() && isValidId(versionId);
+    }
+
+    // Visitor business inquiries (strict PII isolation)
+    match /inquiries/{inquiryId} {
+      allow get: if isAdmin() && isValidId(inquiryId);
+      allow list: if isAdmin();
+      allow create: if isValidId(inquiryId)
+        && isValidInquiry(incoming())
+        && incoming().status == 'new'
+        && incoming().adminNotes == ''
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(inquiryId)
+        && isValidInquiry(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status',
+          'adminNotes',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(inquiryId);
+    }
+  }
+}
