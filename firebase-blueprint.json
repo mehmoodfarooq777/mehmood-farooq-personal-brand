@@ -2,16 +2,17 @@
   "entities": {
     "SiteConfig": {
       "title": "SiteConfig",
-      "description": "Complete personal brand configuration for draft and published states.",
+      "description": "Complete personal brand configuration for draft and published states, including per-page SEO, image alt descriptions, and Search Console verification.",
       "type": "object",
       "properties": {
         "brandName": { "type": "string", "minLength": 2, "maxLength": 100 },
-        "heroHeading": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "heroHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
         "tagline": { "type": "string", "minLength": 2, "maxLength": 140 },
         "profession": { "type": "string", "minLength": 2, "maxLength": 160 },
         "location": { "type": "string", "minLength": 2, "maxLength": 80 },
         "heroDescription": { "type": "string", "minLength": 10, "maxLength": 500 },
         "heroPortraitUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "heroPortraitAlt": { "type": "string", "minLength": 0, "maxLength": 240 },
         "heroPrimaryCtaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
         "heroPrimaryCtaUrl": { "type": "string", "minLength": 1, "maxLength": 300 },
         "heroSecondaryCtaLabel": { "type": "string", "minLength": 1, "maxLength": 60 },
@@ -20,6 +21,7 @@
         "aboutParagraphs": { "type": "array" },
         "aboutExperience": { "type": "array" },
         "aboutWorkspaceUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "aboutWorkspaceAlt": { "type": "string", "minLength": 0, "maxLength": 240 },
         "businessHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
         "businessName": { "type": "string", "minLength": 2, "maxLength": 140 },
         "businessCountry": { "type": "string", "minLength": 2, "maxLength": 120 },
@@ -30,6 +32,7 @@
         "businessWebsiteUrl": { "type": "string", "minLength": 8, "maxLength": 300 },
         "businessLogoUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
         "businessShowcaseUrl": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "businessShowcaseAlt": { "type": "string", "minLength": 0, "maxLength": 240 },
         "businessServices": { "type": "array" },
         "connectHeading": { "type": "string", "minLength": 2, "maxLength": 140 },
         "connectDescription": { "type": "string", "minLength": 10, "maxLength": 500 },
@@ -63,6 +66,10 @@
         "seoKeywords": { "type": "string", "minLength": 0, "maxLength": 400 },
         "seoOgImageUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
         "seoFaviconUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "siteBaseUrl": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "canonicalUrl": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "googleSiteVerification": { "type": "string", "minLength": 0, "maxLength": 200 },
+        "pageSeo": { "type": "object" },
         "footerDescription": { "type": "string", "minLength": 0, "maxLength": 300 },
         "footerCopyright": { "type": "string", "minLength": 2, "maxLength": 160 },
         "sectionVisibility": { "type": "object" },
@@ -77,6 +84,7 @@
         "location",
         "heroDescription",
         "heroPortraitUrl",
+        "heroPortraitAlt",
         "heroPrimaryCtaLabel",
         "heroPrimaryCtaUrl",
         "heroSecondaryCtaLabel",
@@ -85,6 +93,7 @@
         "aboutParagraphs",
         "aboutExperience",
         "aboutWorkspaceUrl",
+        "aboutWorkspaceAlt",
         "businessHeading",
         "businessName",
         "businessCountry",
@@ -95,6 +104,7 @@
         "businessWebsiteUrl",
         "businessLogoUrl",
         "businessShowcaseUrl",
+        "businessShowcaseAlt",
         "businessServices",
         "connectHeading",
         "connectDescription",
@@ -115,6 +125,10 @@
         "seoKeywords",
         "seoOgImageUrl",
         "seoFaviconUrl",
+        "siteBaseUrl",
+        "canonicalUrl",
+        "googleSiteVerification",
+        "pageSeo",
         "footerDescription",
         "footerCopyright",
         "sectionVisibility",
@@ -172,6 +186,54 @@
         "updatedAt"
       ]
     },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Original article published by Mehmood Farooq with dedicated SEO and structured metadata.",
+      "type": "object",
+      "properties": {
+        "slug": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 140,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "title": { "type": "string", "minLength": 3, "maxLength": 160 },
+        "excerpt": { "type": "string", "minLength": 10, "maxLength": 400 },
+        "content": { "type": "string", "minLength": 20, "maxLength": 25000 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "coverImageUrl": { "type": "string", "minLength": 0, "maxLength": 700000 },
+        "coverImageAlt": { "type": "string", "minLength": 0, "maxLength": 240 },
+        "seoTitle": { "type": "string", "minLength": 0, "maxLength": 160 },
+        "seoDescription": { "type": "string", "minLength": 0, "maxLength": 320 },
+        "seoKeywords": { "type": "string", "minLength": 0, "maxLength": 400 },
+        "canonicalUrl": { "type": "string", "minLength": 0, "maxLength": 300 },
+        "readTimeMinutes": { "type": "number" },
+        "publishedDate": { "type": "string", "minLength": 4, "maxLength": 40 },
+        "isPublished": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "slug",
+        "title",
+        "excerpt",
+        "content",
+        "category",
+        "coverImageUrl",
+        "coverImageAlt",
+        "seoTitle",
+        "seoDescription",
+        "seoKeywords",
+        "canonicalUrl",
+        "readTimeMinutes",
+        "publishedDate",
+        "isPublished",
+        "updatedByUid",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
     "MediaItem": {
       "title": "MediaItem",
       "description": "Admin-managed media asset in the Photo & Media Library.",
@@ -181,7 +243,7 @@
         "description": { "type": "string", "minLength": 0, "maxLength": 400 },
         "category": {
           "type": "string",
-          "enum": ["profile", "hero", "about", "journey", "business", "seo", "general"]
+          "enum": ["profile", "hero", "about", "journey", "business", "blog", "seo", "general"]
         },
         "url": { "type": "string", "minLength": 1, "maxLength": 700000 },
         "mimeType": { "type": "string", "minLength": 1, "maxLength": 80 },
@@ -263,6 +325,10 @@
     "/principles/{principleId}": {
       "schema": { "$ref": "#/entities/PrincipleItem" },
       "description": "Stores core executive principles."
+    },
+    "/blogPosts/{postId}": {
+      "schema": { "$ref": "#/entities/BlogPost" },
+      "description": "Stores original blog articles authored by Mehmood Farooq with SEO metadata."
     },
     "/mediaItems/{mediaId}": {
       "schema": { "$ref": "#/entities/MediaItem" },

@@ -1,25 +1,48 @@
+import type { MouseEvent } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { SITE_CONFIG, type JourneyStage } from '../data/siteConfig';
 import { ExecutiveImage } from './ExecutiveImage';
 
 interface JourneySectionProps {
   stages: JourneyStage[];
+  onNavigate?: (path: string) => void;
 }
 
-export function JourneySection({ stages }: JourneySectionProps) {
+export function JourneySection({ stages, onNavigate }: JourneySectionProps) {
+  const handleNav = (e: MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (!onNavigate) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    onNavigate(path);
+  };
+
   return (
     <section
       id="journey"
       className="border-b border-white/10 bg-[#080808] py-20 lg:py-28"
     >
       <div className="mx-auto max-w-6xl px-6 lg:px-8">
-        <div className="max-w-2xl">
-          <p className="text-xs font-semibold tracking-[0.2em] text-[#D4AF37] uppercase">
-            {SITE_CONFIG.journey.kicker}
-          </p>
-          <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-[#F5F5F4] text-balance sm:text-4xl lg:text-5xl">
-            {SITE_CONFIG.journey.heading}
-          </h2>
-          <div className="mt-6 h-px w-16 bg-[#D4AF37]/60" aria-hidden="true" />
+        <div className="flex flex-col justify-between gap-6 sm:flex-row sm:items-end">
+          <div className="max-w-2xl">
+            <p className="text-xs font-semibold tracking-[0.2em] text-[#D4AF37] uppercase">
+              {SITE_CONFIG.journey.kicker}
+            </p>
+            <h2 className="mt-3 font-display text-3xl font-semibold tracking-tight text-[#F5F5F4] text-balance sm:text-4xl lg:text-5xl">
+              {SITE_CONFIG.journey.heading}
+            </h2>
+            <div className="mt-6 h-px w-16 bg-[#D4AF37]/60" aria-hidden="true" />
+          </div>
+
+          <a
+            href="/journey"
+            onClick={(e) => handleNav(e, '/journey')}
+            className="inline-flex items-center gap-2 text-xs font-semibold tracking-wider text-[#D4AF37] uppercase transition-colors hover:text-[#F2D675] shrink-0"
+          >
+            <span>Explore Full Journey</span>
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </a>
         </div>
 
         {/* Architectural Timeline */}
@@ -43,7 +66,9 @@ export function JourneySection({ stages }: JourneySectionProps) {
                   <div className="mt-5 aspect-[16/10] w-full overflow-hidden border border-white/10">
                     <ExecutiveImage
                       src={stage.imageUrl}
-                      alt={stage.title}
+                      alt={`${stage.title} — Mehmood Farooq Entrepreneurial Journey`}
+                      width={800}
+                      height={500}
                       className="h-full w-full"
                       fallbackTitle={stage.title}
                     />

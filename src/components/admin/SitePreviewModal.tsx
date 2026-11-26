@@ -1,8 +1,10 @@
 import { Check, Eye, X } from 'lucide-react';
-import type {
-  JourneyStage,
-  LiveSiteContent,
-  PrincipleItem,
+import {
+  DEFAULT_BLOG_POSTS,
+  type BlogPost,
+  type JourneyStage,
+  type LiveSiteContent,
+  type PrincipleItem,
 } from '../../data/siteConfig';
 import { Navbar } from '../Navbar';
 import { HeroSection } from '../HeroSection';
@@ -10,6 +12,7 @@ import { AboutSection } from '../AboutSection';
 import { JourneySection } from '../JourneySection';
 import { BusinessSection } from '../BusinessSection';
 import { PrinciplesSection } from '../PrinciplesSection';
+import { BlogPreviewSection } from '../BlogPreviewSection';
 import { ConnectSection } from '../ConnectSection';
 import { Footer } from '../Footer';
 
@@ -17,6 +20,7 @@ interface SitePreviewModalProps {
   content: LiveSiteContent;
   stages: JourneyStage[];
   principles: PrincipleItem[];
+  blogPosts?: BlogPost[];
   onPublish: () => void;
   onClose: () => void;
 }
@@ -25,11 +29,15 @@ export function SitePreviewModal({
   content,
   stages,
   principles,
+  blogPosts,
   onPublish,
   onClose,
 }: SitePreviewModalProps) {
   const publishedStages = stages.filter((s) => s.isPublished !== false);
   const publishedPrinciples = principles.filter((p) => p.isPublished !== false);
+  const publishedPosts = (
+    blogPosts && blogPosts.length > 0 ? blogPosts : DEFAULT_BLOG_POSTS
+  ).filter((p) => p.isPublished);
 
   return (
     <div
@@ -82,6 +90,7 @@ export function SitePreviewModal({
         {content.sectionVisibility.principles && (
           <PrinciplesSection items={publishedPrinciples} />
         )}
+        <BlogPreviewSection posts={publishedPosts} />
         {content.sectionVisibility.connect && (
           <ConnectSection content={content} isPreview />
         )}

@@ -3,24 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Mehmood Farooq | Entrepreneur & Logistics Professional — Building Beyond Borders</title>
+    <title>Mehmood Farooq | Entrepreneur &amp; Founder of TITAN ROUTE DISPATCH (TRD) LLC</title>
     <meta
       name="description"
-      content="Mehmood Farooq is a young entrepreneur from Pakistan and founder of TITAN ROUTE DISPATCH (TRD) LLC, a United States-based trucking and logistics company registered in Wyoming, USA."
+      content="Discover Mehmood Farooq, an entrepreneur and founder of TITAN ROUTE DISPATCH (TRD) LLC, a US-based trucking and logistics company registered in Wyoming."
     />
-    <meta property="og:title" content="Mehmood Farooq | Building Beyond Borders" />
+    <meta
+      name="keywords"
+      content="Mehmood Farooq, Mehmood Farooq Entrepreneur, Mehmood Farooq Business Owner, Mehmood Farooq TRD, Titan Route Dispatch LLC, Mehmood Farooq Logistics, TITAN ROUTE DISPATCH (TRD) LLC"
+    />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Mehmood Farooq | Entrepreneur &amp; Founder of TITAN ROUTE DISPATCH (TRD) LLC" />
     <meta
       property="og:description"
-      content="Personal brand of Mehmood Farooq, entrepreneur from Pakistan and founder of TITAN ROUTE DISPATCH (TRD) LLC, registered in Wyoming, United States of America."
+      content="Discover Mehmood Farooq, an entrepreneur and founder of TITAN ROUTE DISPATCH (TRD) LLC, a US-based trucking and logistics company registered in Wyoming."
     />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content="profile" />
     <meta property="og:site_name" content="Mehmood Farooq" />
+    <meta property="og:image" content="/src/assets/images/hero_executive_portrait_1795727162039.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Mehmood Farooq | Building Beyond Borders" />
+    <meta name="twitter:title" content="Mehmood Farooq | Entrepreneur &amp; Founder of TITAN ROUTE DISPATCH (TRD) LLC" />
     <meta
       name="twitter:description"
-      content="Entrepreneur from Pakistan behind TITAN ROUTE DISPATCH (TRD) LLC, a US trucking and logistics company registered in Wyoming, USA."
+      content="Discover Mehmood Farooq, an entrepreneur and founder of TITAN ROUTE DISPATCH (TRD) LLC, a US-based trucking and logistics company registered in Wyoming."
     />
+    <meta name="twitter:image" content="/src/assets/images/hero_executive_portrait_1795727162039.jpg" />
     <meta name="theme-color" content="#080808" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,20 +38,41 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "Person",
-        "name": "Mehmood Farooq",
-        "description": "Entrepreneur, Business Owner, and Logistics Professional from Pakistan. Building Beyond Borders.",
-        "jobTitle": "Entrepreneur & Logistics Professional",
-        "nationality": "Pakistan",
-        "worksFor": {
-          "@type": "Organization",
-          "name": "TITAN ROUTE DISPATCH (TRD) LLC",
-          "url": "https://trdispatch.us/",
-          "location": {
-            "@type": "AdministrativeArea",
-            "name": "Wyoming, United States of America"
+        "@graph": [
+          {
+            "@type": "Person",
+            "@id": "#person",
+            "name": "Mehmood Farooq",
+            "description": "Mehmood Farooq is a young entrepreneur from Pakistan and founder of TITAN ROUTE DISPATCH (TRD) LLC, building experience in international business, US trucking and logistics, and entrepreneurship.",
+            "jobTitle": "Entrepreneur & Business Owner",
+            "nationality": {
+              "@type": "Country",
+              "name": "Pakistan"
+            },
+            "founder": { "@id": "#organization" },
+            "worksFor": { "@id": "#organization" }
+          },
+          {
+            "@type": "Organization",
+            "@id": "#organization",
+            "name": "TITAN ROUTE DISPATCH (TRD) LLC",
+            "url": "https://trdispatch.us/",
+            "email": "info@trdisaptch.us",
+            "knowsAbout": "Trucking and Logistics",
+            "founder": { "@id": "#person" },
+            "location": {
+              "@type": "AdministrativeArea",
+              "name": "Wyoming, United States of America"
+            }
+          },
+          {
+            "@type": "WebSite",
+            "@id": "#website",
+            "name": "Mehmood Farooq",
+            "inLanguage": "en",
+            "publisher": { "@id": "#person" }
           }
-        }
+        ]
       }
     </script>
   </head>

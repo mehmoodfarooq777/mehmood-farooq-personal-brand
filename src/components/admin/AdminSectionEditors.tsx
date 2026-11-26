@@ -247,7 +247,7 @@ export function HomepageEditor({
         <AdminInput
           label="Main Hero Heading"
           value={draft.heroHeading}
-          maxLength={100}
+          maxLength={140}
           onChange={(v) => onChange({ ...draft, heroHeading: v })}
         />
         <AdminInput

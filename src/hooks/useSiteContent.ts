@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import {
+  DEFAULT_BLOG_POSTS,
   DEFAULT_LIVE_CONTENT,
   normalizeSiteConfig,
   SITE_CONFIG,
+  type BlogPost,
   type JourneyStage,
   type LiveSiteContent,
   type PrincipleItem,
 } from '../data/siteConfig';
 import { db } from '../lib/firebase';
+import { applyClientSeo, resolveRouteSeo } from '../lib/seo';
 
 const WELCOME_CACHE_KEY = 'mf_welcome_prefs_v1';
 
@@ -40,51 +43,26 @@ function writeCachedWelcomePrefs(content: LiveSiteContent) {
   }
 }
 
-export function applyDynamicSeoMetadata(content: LiveSiteContent) {
-  if (typeof document === 'undefined') return;
-
-  if (content.seoTitle) {
-    document.title = content.seoTitle;
-  }
-
-  const updateMeta = (attr: 'name' | 'property', key: string, value: string) => {
-    if (!value) return;
-    let tag = document.querySelector(`meta[${attr}="${key}"]`);
-    if (!tag) {
-      tag = document.createElement('meta');
-      tag.setAttribute(attr, key);
-      document.head.appendChild(tag);
-    }
-    tag.setAttribute('content', value);
-  };
-
-  updateMeta('name', 'description', content.seoDescription);
-  updateMeta('name', 'keywords', content.seoKeywords);
-  updateMeta('property', 'og:title', content.seoTitle);
-  updateMeta('property', 'og:description', content.seoDescription);
-  updateMeta('name', 'twitter:title', content.seoTitle);
-  updateMeta('name', 'twitter:description', content.seoDescription);
-
-  if (content.seoOgImageUrl) {
-    updateMeta('property', 'og:image', content.seoOgImageUrl);
-    updateMeta('name', 'twitter:image', content.seoOgImageUrl);
-  }
-
-  if (content.seoFaviconUrl) {
-    let iconLink = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
-    if (!iconLink) {
-      iconLink = document.createElement('link');
-      iconLink.rel = 'icon';
-      document.head.appendChild(iconLink);
-    }
-    iconLink.href = content.seoFaviconUrl;
-  }
+export function applyDynamicSeoMetadata(
+  content: LiveSiteContent,
+  pathname = '/',
+  blogPosts: BlogPost[] = DEFAULT_BLOG_POSTS
+) {
+  if (typeof window === 'undefined') return;
+  const resolved = resolveRouteSeo(
+    pathname,
+    content,
+    blogPosts,
+    window.location.origin
+  );
+  applyClientSeo(resolved, content);
 }
 
 interface PublicSiteState {
   content: LiveSiteContent;
   journeyStages: JourneyStage[];
   principles: PrincipleItem[];
+  blogPosts: BlogPost[];
   loading: boolean;
 }
 
@@ -96,6 +74,7 @@ export function useSiteContent() {
     },
     journeyStages: SITE_CONFIG.journey.stages,
     principles: SITE_CONFIG.principles.items,
+    blogPosts: DEFAULT_BLOG_POSTS,
     loading: true,
   }));
 
@@ -104,21 +83,28 @@ export function useSiteContent() {
 
     async function loadPublicData() {
       try {
-        const [configSnap, stagesSnap, principlesSnap] = await Promise.all([
-          getDoc(doc(db, 'siteConfig', 'public')),
-          getDocs(
-            query(
-              collection(db, 'journeyStages'),
-              where('isPublished', '==', true)
-            )
-          ),
-          getDocs(
-            query(
-              collection(db, 'principles'),
-              where('isPublished', '==', true)
-            )
-          ),
-        ]);
+        const [configSnap, stagesSnap, principlesSnap, blogSnap] =
+          await Promise.all([
+            getDoc(doc(db, 'siteConfig', 'public')),
+            getDocs(
+              query(
+                collection(db, 'journeyStages'),
+                where('isPublished', '==', true)
+              )
+            ),
+            getDocs(
+              query(
+                collection(db, 'principles'),
+                where('isPublished', '==', true)
+              )
+            ),
+            getDocs(
+              query(
+                collection(db, 'blogPosts'),
+                where('isPublished', '==', true)
+              )
+            ),
+          ]);
 
         if (!active) return;
 
@@ -127,7 +113,6 @@ export function useSiteContent() {
           : DEFAULT_LIVE_CONTENT;
 
         writeCachedWelcomePrefs(nextContent);
-        applyDynamicSeoMetadata(nextContent);
 
         const nextStages: JourneyStage[] = stagesSnap.empty
           ? SITE_CONFIG.journey.stages
@@ -156,10 +141,22 @@ export function useSiteContent() {
               }))
               .sort((a, b) => a.order - b.order);
 
+        const nextPosts: BlogPost[] = blogSnap.empty
+          ? DEFAULT_BLOG_POSTS
+          : blogSnap.docs
+              .map((d) => ({
+                ...(d.data() as Omit<BlogPost, 'id'>),
+                id: d.id,
+              }))
+              .sort((a, b) =>
+                (b.publishedDate || '').localeCompare(a.publishedDate || '')
+              );
+
         setState({
           content: nextContent,
           journeyStages: nextStages,
           principles: nextPrinciples,
+          blogPosts: nextPosts,
           loading: false,
         });
       } catch (err) {

@@ -54,6 +54,7 @@ const CATEGORIES: { id: 'all' | MediaCategory; label: string }[] = [
   { id: 'about', label: 'About' },
   { id: 'journey', label: 'Journey' },
   { id: 'business', label: 'Business' },
+  { id: 'blog', label: 'Blog' },
   { id: 'seo', label: 'SEO & Icons' },
   { id: 'general', label: 'General' },
 ];

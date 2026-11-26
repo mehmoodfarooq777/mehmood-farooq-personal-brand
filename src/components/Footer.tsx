@@ -1,9 +1,11 @@
+import type { MouseEvent } from 'react';
 import { Globe } from 'lucide-react';
 import { type LiveSiteContent, type SocialProfile } from '../data/siteConfig';
 import { SocialIcon } from './SocialIcons';
 
 interface FooterProps {
   content: LiveSiteContent;
+  onNavigate?: (path: string) => void;
 }
 
 function safeHref(url: string): string {
@@ -19,7 +21,7 @@ function safeHref(url: string): string {
   return '#';
 }
 
-export function Footer({ content }: FooterProps) {
+export function Footer({ content, onNavigate }: FooterProps) {
   const socialProfiles: SocialProfile[] = [
     {
       id: 'tiktok',
@@ -51,13 +53,23 @@ export function Footer({ content }: FooterProps) {
     (s) => s.label.trim() && s.url.trim()
   );
 
+  const handleLinkClick = (e: MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (!onNavigate) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    onNavigate(path);
+  };
+
   return (
     <footer className="bg-[#080808] py-12">
       <div className="mx-auto max-w-6xl px-6 lg:px-8">
-        <div className="flex flex-col items-start justify-between gap-8 border-b border-white/10 pb-10 md:flex-row md:items-center">
+        <div className="flex flex-col items-start justify-between gap-8 border-b border-white/10 pb-10 lg:flex-row lg:items-center">
           <div>
             <a
-              href="#top"
+              href="/"
+              onClick={(e) => handleLinkClick(e, '/')}
               className="font-display text-2xl font-semibold tracking-wide text-[#F5F5F4] transition-colors hover:text-[#F2D675]"
             >
               {content.brandName}
@@ -69,11 +81,12 @@ export function Footer({ content }: FooterProps) {
 
           <nav
             aria-label="Footer navigation"
-            className="flex flex-wrap items-center gap-6 text-sm text-[#9E9E98]"
+            className="flex flex-wrap items-center gap-x-6 gap-y-2.5 text-sm text-[#9E9E98]"
           >
             {content.sectionVisibility.about && (
               <a
-                href="#about"
+                href="/about"
+                onClick={(e) => handleLinkClick(e, '/about')}
                 className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
               >
                 About
@@ -81,7 +94,8 @@ export function Footer({ content }: FooterProps) {
             )}
             {content.sectionVisibility.journey && (
               <a
-                href="#journey"
+                href="/journey"
+                onClick={(e) => handleLinkClick(e, '/journey')}
                 className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
               >
                 Journey
@@ -89,20 +103,34 @@ export function Footer({ content }: FooterProps) {
             )}
             {content.sectionVisibility.business && (
               <a
-                href="#business"
+                href="/business"
+                onClick={(e) => handleLinkClick(e, '/business')}
                 className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
               >
                 Business
               </a>
             )}
-            {content.sectionVisibility.principles && (
-              <a
-                href="#principles"
-                className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
-              >
-                Principles
-              </a>
-            )}
+            <a
+              href="/experience"
+              onClick={(e) => handleLinkClick(e, '/experience')}
+              className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
+            >
+              Experience
+            </a>
+            <a
+              href="/blog"
+              onClick={(e) => handleLinkClick(e, '/blog')}
+              className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
+            >
+              Blog
+            </a>
+            <a
+              href="/contact"
+              onClick={(e) => handleLinkClick(e, '/contact')}
+              className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
+            >
+              Contact
+            </a>
             <a
               href={safeHref(content.businessWebsiteUrl)}
               target="_blank"

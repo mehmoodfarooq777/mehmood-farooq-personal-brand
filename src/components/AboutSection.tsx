@@ -1,13 +1,25 @@
+import type { MouseEvent } from 'react';
+import { ArrowRight } from 'lucide-react';
 import { SITE_CONFIG, type LiveSiteContent } from '../data/siteConfig';
 import { ExecutiveImage } from './ExecutiveImage';
 
 interface AboutSectionProps {
   content: LiveSiteContent;
+  onNavigate?: (path: string) => void;
 }
 
-export function AboutSection({ content }: AboutSectionProps) {
+export function AboutSection({ content, onNavigate }: AboutSectionProps) {
   const paragraphs = content.aboutParagraphs.filter((p) => p.trim().length > 0);
   const experience = content.aboutExperience || [];
+
+  const handleNav = (e: MouseEvent<HTMLAnchorElement>, path: string) => {
+    if (!onNavigate) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    onNavigate(path);
+  };
 
   return (
     <section
@@ -22,7 +34,12 @@ export function AboutSection({ content }: AboutSectionProps) {
               <div className="aspect-[4/3] w-full overflow-hidden">
                 <ExecutiveImage
                   src={content.aboutWorkspaceUrl}
-                  alt={SITE_CONFIG.images.aboutWorkspace.alt}
+                  alt={
+                    content.aboutWorkspaceAlt ||
+                    SITE_CONFIG.images.aboutWorkspace.alt
+                  }
+                  width={1200}
+                  height={900}
                   className="h-full w-full"
                   fallbackTitle="Executive Vision"
                 />
@@ -121,6 +138,25 @@ export function AboutSection({ content }: AboutSectionProps) {
                 ))}
               </div>
             )}
+
+            <div className="mt-8 flex flex-wrap items-center gap-6 text-xs font-semibold tracking-wider uppercase">
+              <a
+                href="/about"
+                onClick={(e) => handleNav(e, '/about')}
+                className="inline-flex items-center gap-2 text-[#D4AF37] transition-colors hover:text-[#F2D675]"
+              >
+                <span>About {content.brandName}</span>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+              <a
+                href="/experience"
+                onClick={(e) => handleNav(e, '/experience')}
+                className="inline-flex items-center gap-2 text-[#B8B8B3] transition-colors hover:text-[#F2D675]"
+              >
+                <span>Professional Experience</span>
+                <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+              </a>
+            </div>
           </div>
         </div>
       </div>

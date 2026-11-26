@@ -23,6 +23,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import {
+  BookOpen,
   Briefcase,
   CheckCircle2,
   Compass,
@@ -51,17 +52,24 @@ import {
 } from 'lucide-react';
 import {
   clampString,
+  DEFAULT_BLOG_POSTS,
   DEFAULT_LIVE_CONTENT,
+  DEFAULT_PAGE_SEO,
   EMAIL_REGEX,
   HEX_COLOR_REGEX,
   normalizeSiteConfig,
   SITE_CONFIG,
+  SLUG_REGEX,
+  slugifyTitle,
+  type BlogPost,
   type InquiryRecord,
   type JourneyStage,
   type LiveSiteContent,
   type MediaCategory,
   type MediaItemRecord,
+  type PageSeoMap,
   type PrincipleItem,
+  type PublicPageKey,
   type SiteVersionRecord,
   type WelcomeAnimationStyle,
 } from '../data/siteConfig';
@@ -90,11 +98,13 @@ import {
   PrincipleCardEditor,
   ProfileEditor,
 } from './admin/AdminSectionEditors';
+import { BlogManagerTab } from './admin/BlogManagerTab';
 import {
   MediaLibraryTab,
   type ImageAssignTarget,
 } from './admin/MediaLibraryTab';
 import { MediaPickerModal } from './admin/MediaPickerModal';
+import { SeoManagerTab } from './admin/SeoManagerTab';
 import { SitePreviewModal } from './admin/SitePreviewModal';
 
 interface AdminDashboardProps {
@@ -110,6 +120,7 @@ type AdminSection =
   | 'media'
   | 'journey'
   | 'business'
+  | 'blog'
   | 'social'
   | 'contact'
   | 'welcome'
@@ -195,6 +206,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     isPublished: true,
   });
 
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([]);
   const [mediaItems, setMediaItems] = useState<MediaItemRecord[]>([]);
   const [versions, setVersions] = useState<SiteVersionRecord[]>([]);
   const [inquiries, setInquiries] = useState<InquiryRecord[]>([]);
@@ -343,6 +355,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
           publicSnap,
           stagesSnap,
           principlesSnap,
+          blogSnap,
           mediaSnap,
           versionsSnap,
         ] = await Promise.all([
@@ -350,6 +363,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
           getDoc(doc(db, 'siteConfig', 'public')),
           getDocs(collection(db, 'journeyStages')),
           getDocs(collection(db, 'principles')),
+          getDocs(collection(db, 'blogPosts')),
           getDocs(collection(db, 'mediaItems')),
           getDocs(collection(db, 'siteVersions')),
         ]);
@@ -416,6 +430,16 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         } else {
           setPrinciples(SITE_CONFIG.principles.items);
         }
+
+        const loadedPosts: BlogPost[] = blogSnap.docs
+          .map((d) => ({
+            ...(d.data() as Omit<BlogPost, 'id'>),
+            id: d.id,
+          }))
+          .sort((a, b) =>
+            (b.publishedDate || '').localeCompare(a.publishedDate || '')
+          );
+        setBlogPosts(loadedPosts);
 
         const loadedMedia: MediaItemRecord[] = mediaSnap.docs.map((d) => ({
           id: d.id,
@@ -712,9 +736,32 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         url: clampString(link.url, 300),
       }));
 
+    const pageKeys: PublicPageKey[] = [
+      'about',
+      'journey',
+      'business',
+      'experience',
+      'contact',
+      'blog',
+    ];
+    const safePageSeo = {} as PageSeoMap;
+    for (const key of pageKeys) {
+      const entry = source.pageSeo?.[key] || DEFAULT_PAGE_SEO[key];
+      safePageSeo[key] = {
+        title: clampString(entry.title || DEFAULT_PAGE_SEO[key].title, 160),
+        description: clampString(
+          entry.description || DEFAULT_PAGE_SEO[key].description,
+          320
+        ),
+        keywords: clampString(entry.keywords || '', 400),
+        canonicalUrl: clampString(entry.canonicalUrl || '', 300),
+        ogImageUrl: clampString(entry.ogImageUrl || '', 700000),
+      };
+    }
+
     return {
       brandName: clampString(source.brandName, 100),
-      heroHeading: clampString(source.heroHeading, 100),
+      heroHeading: clampString(source.heroHeading, 140),
       tagline: clampString(source.tagline, 140),
       profession: clampString(source.profession, 160),
       location: clampString(source.location, 80),
@@ -722,20 +769,28 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       heroPortraitUrl:
         clampString(source.heroPortraitUrl, 700000) ||
         DEFAULT_LIVE_CONTENT.heroPortraitUrl,
+      heroPortraitAlt: clampString(
+        source.heroPortraitAlt || DEFAULT_LIVE_CONTENT.heroPortraitAlt,
+        240
+      ),
       heroPrimaryCtaLabel:
         clampString(source.heroPrimaryCtaLabel, 60) || 'Explore My Journey',
       heroPrimaryCtaUrl:
-        clampString(source.heroPrimaryCtaUrl, 300) || '#journey',
+        clampString(source.heroPrimaryCtaUrl, 300) || '/journey',
       heroSecondaryCtaLabel:
         clampString(source.heroSecondaryCtaLabel, 60) || 'Connect With Me',
       heroSecondaryCtaUrl:
-        clampString(source.heroSecondaryCtaUrl, 300) || '#connect',
+        clampString(source.heroSecondaryCtaUrl, 300) || '/contact',
       aboutHeading: clampString(source.aboutHeading, 140),
       aboutParagraphs: safeParagraphs,
       aboutExperience: safeExperience,
       aboutWorkspaceUrl:
         clampString(source.aboutWorkspaceUrl, 700000) ||
         DEFAULT_LIVE_CONTENT.aboutWorkspaceUrl,
+      aboutWorkspaceAlt: clampString(
+        source.aboutWorkspaceAlt || DEFAULT_LIVE_CONTENT.aboutWorkspaceAlt,
+        240
+      ),
       businessHeading: clampString(source.businessHeading, 140),
       businessName: clampString(source.businessName, 140),
       businessCountry:
@@ -753,6 +808,10 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       businessShowcaseUrl:
         clampString(source.businessShowcaseUrl, 700000) ||
         DEFAULT_LIVE_CONTENT.businessShowcaseUrl,
+      businessShowcaseAlt: clampString(
+        source.businessShowcaseAlt || DEFAULT_LIVE_CONTENT.businessShowcaseAlt,
+        240
+      ),
       businessServices: safeServices,
       connectHeading: clampString(source.connectHeading, 140),
       connectDescription: clampString(source.connectDescription, 500),
@@ -788,6 +847,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       seoKeywords: clampString(source.seoKeywords, 400),
       seoOgImageUrl: clampString(source.seoOgImageUrl, 700000),
       seoFaviconUrl: clampString(source.seoFaviconUrl, 700000),
+      siteBaseUrl: clampString(source.siteBaseUrl || '', 300),
+      canonicalUrl: clampString(source.canonicalUrl || '', 300),
+      googleSiteVerification: clampString(
+        source.googleSiteVerification || '',
+        200
+      ),
+      pageSeo: safePageSeo,
       footerDescription: clampString(source.footerDescription, 300),
       footerCopyright: clampString(
         source.footerCopyright || DEFAULT_LIVE_CONTENT.footerCopyright,
@@ -910,7 +976,11 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       });
       await batch.commit();
 
-      applyDynamicSeoMetadata(snapshot);
+      applyDynamicSeoMetadata(
+        snapshot,
+        route,
+        blogPosts.length > 0 ? blogPosts : DEFAULT_BLOG_POSTS
+      );
       setDraftContent(snapshot);
       setHasPublishedDoc(true);
       setHasUnpublishedChanges(false);
@@ -1396,6 +1466,139 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     }
   }
 
+  // Blog Articles CRUD
+  async function handleSaveBlogPost(post: BlogPost) {
+    if (!user || !isAuthorized) return;
+    const cleanSlug = slugifyTitle(post.slug || post.title);
+    if (!SLUG_REGEX.test(cleanSlug)) {
+      setErrorMessage('Invalid article URL slug.');
+      return;
+    }
+
+    const isExisting = Boolean(post.id && blogPosts.some((p) => p.id === post.id));
+    const id = post.id || `post_${Date.now()}`;
+    setSaving(true);
+    setErrorMessage('');
+
+    const payload = {
+      slug: clampString(cleanSlug, 140),
+      title: clampString(post.title, 160),
+      excerpt: clampString(post.excerpt, 400),
+      content: clampString(post.content, 25000),
+      category: clampString(post.category || 'Entrepreneurship', 60),
+      coverImageUrl: clampString(post.coverImageUrl || '', 700000),
+      coverImageAlt: clampString(post.coverImageAlt || '', 240),
+      seoTitle: clampString(post.seoTitle || '', 160),
+      seoDescription: clampString(post.seoDescription || '', 320),
+      seoKeywords: clampString(post.seoKeywords || '', 400),
+      canonicalUrl: clampString(post.canonicalUrl || '', 300),
+      readTimeMinutes: Math.min(120, Math.max(1, Math.round(post.readTimeMinutes || 4))),
+      publishedDate: clampString(
+        post.publishedDate || new Date().toISOString().split('T')[0],
+        40
+      ),
+      isPublished: Boolean(post.isPublished),
+      updatedByUid: user.uid,
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      if (isExisting) {
+        await updateDoc(doc(db, 'blogPosts', id), payload);
+      } else {
+        await setDoc(doc(db, 'blogPosts', id), {
+          ...payload,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      const savedRecord: BlogPost = {
+        ...post,
+        ...payload,
+        id,
+      };
+      setBlogPosts((prev) => {
+        const filtered = prev.filter((p) => p.id !== id);
+        return [savedRecord, ...filtered].sort((a, b) =>
+          (b.publishedDate || '').localeCompare(a.publishedDate || '')
+        );
+      });
+      showNotice(`Saved article "${savedRecord.title}".`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `blogPosts/${id}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDeleteBlogPost(postId: string) {
+    if (!user || !isAuthorized) return;
+    setSaving(true);
+    try {
+      await deleteDoc(doc(db, 'blogPosts', postId));
+      setBlogPosts((prev) => prev.filter((p) => p.id !== postId));
+      showNotice('Deleted article.');
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, `blogPosts/${postId}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSeedDefaultBlogs() {
+    if (!user || !isAuthorized) return;
+    setSaving(true);
+    setErrorMessage('');
+    try {
+      const existingIds = new Set(blogPosts.map((p) => p.id));
+      const missing = DEFAULT_BLOG_POSTS.filter((p) => !existingIds.has(p.id));
+      if (missing.length === 0) {
+        showNotice('Starter articles are already synced in your database.');
+        return;
+      }
+
+      const batch = writeBatch(db);
+      for (const post of missing) {
+        batch.set(doc(db, 'blogPosts', post.id), {
+          slug: post.slug,
+          title: post.title,
+          excerpt: post.excerpt,
+          content: post.content,
+          category: post.category,
+          coverImageUrl: post.coverImageUrl,
+          coverImageAlt: post.coverImageAlt,
+          seoTitle: post.seoTitle,
+          seoDescription: post.seoDescription,
+          seoKeywords: post.seoKeywords,
+          canonicalUrl: post.canonicalUrl,
+          readTimeMinutes: post.readTimeMinutes,
+          publishedDate: post.publishedDate,
+          isPublished: post.isPublished,
+          updatedByUid: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      await batch.commit();
+
+      const snap = await getDocs(collection(db, 'blogPosts'));
+      const reloaded = snap.docs
+        .map((d) => ({
+          ...(d.data() as Omit<BlogPost, 'id'>),
+          id: d.id,
+        }))
+        .sort((a, b) =>
+          (b.publishedDate || '').localeCompare(a.publishedDate || '')
+        );
+      setBlogPosts(reloaded);
+      showNotice(`Synced ${missing.length} starter article(s) to database.`);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'blogPosts');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Inquiries Inbox
   async function handleUpdateInquiry(
     inquiry: InquiryRecord,
@@ -1507,6 +1710,12 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     },
     { id: 'journey', label: 'Journey & Timeline', icon: Compass },
     { id: 'business', label: 'Business Management', icon: Briefcase },
+    {
+      id: 'blog',
+      label: 'Blog & Articles',
+      icon: BookOpen,
+      badge: blogPosts.length || DEFAULT_BLOG_POSTS.length,
+    },
     { id: 'social', label: 'Social Media', icon: Share2 },
     {
       id: 'contact',
@@ -1515,7 +1724,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       badge: newInquiriesCount,
     },
     { id: 'welcome', label: 'Welcome Animation', icon: Sparkles },
-    { id: 'seo', label: 'SEO Settings', icon: Globe },
+    { id: 'seo', label: 'SEO & Search Console', icon: Globe },
     { id: 'footer', label: 'Footer Management', icon: LayoutDashboard },
     { id: 'preview', label: 'Website Preview', icon: Eye },
     { id: 'account', label: 'Account Settings', icon: Settings },
@@ -1849,9 +2058,10 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                           { id: 'media', label: 'Photo & Media Library' },
                           { id: 'journey', label: 'Journey Timeline' },
                           { id: 'business', label: 'Business Management' },
+                          { id: 'blog', label: 'Blog & Articles' },
                           { id: 'social', label: 'Social Media' },
                           { id: 'welcome', label: 'Welcome Animation' },
-                          { id: 'seo', label: 'SEO & Favicon' },
+                          { id: 'seo', label: 'SEO & Search Console' },
                         ] as { id: AdminSection; label: string }[]
                       ).map((quick) => (
                         <button
@@ -2168,6 +2378,18 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                     onSelect
                   )
                 }
+              />
+            )}
+
+            {/* 7B. BLOG & CONTENT SEO */}
+            {activeSection === 'blog' && (
+              <BlogManagerTab
+                posts={blogPosts}
+                saving={saving}
+                onSavePost={handleSaveBlogPost}
+                onDeletePost={handleDeleteBlogPost}
+                onSeedDefaults={handleSeedDefaultBlogs}
+                onPickImage={openImagePicker}
               />
             )}
 
@@ -2617,83 +2839,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
               </div>
             )}
 
-            {/* 11. SEO SETTINGS */}
+            {/* 11. SEO & SEARCH CONSOLE SETTINGS */}
             {activeSection === 'seo' && (
-              <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-                <section className="border border-white/10 bg-[#151515] p-6 space-y-4 lg:col-span-7">
-                  <h2 className="font-display text-2xl font-semibold text-[#F5F5F4]">
-                    Search Engine & Metadata
-                  </h2>
-                  <AdminInput
-                    label="Website Title (<title>)"
-                    value={draftContent.seoTitle}
-                    maxLength={160}
-                    onChange={(v) => updateDraft({ ...draftContent, seoTitle: v })}
-                  />
-                  <AdminTextarea
-                    label="Meta Description"
-                    value={draftContent.seoDescription}
-                    maxLength={320}
-                    rows={3}
-                    onChange={(v) =>
-                      updateDraft({ ...draftContent, seoDescription: v })
-                    }
-                  />
-                  <AdminTextarea
-                    label="Keywords (Comma-Separated)"
-                    value={draftContent.seoKeywords}
-                    maxLength={400}
-                    rows={2}
-                    onChange={(v) =>
-                      updateDraft({ ...draftContent, seoKeywords: v })
-                    }
-                  />
-                </section>
-
-                <section className="border border-white/10 bg-[#151515] p-6 space-y-5 lg:col-span-5">
-                  <h2 className="font-display text-2xl font-semibold text-[#F5F5F4]">
-                    Social Sharing & Favicon
-                  </h2>
-                  <ImageSlotEditor
-                    label="Social Share Image (og:image)"
-                    url={draftContent.seoOgImageUrl}
-                    onChangeUrl={(url) =>
-                      updateDraft({ ...draftContent, seoOgImageUrl: url })
-                    }
-                    onClear={() =>
-                      updateDraft({ ...draftContent, seoOgImageUrl: '' })
-                    }
-                    onOpenPicker={() =>
-                      openImagePicker(
-                        'Select Social Share Image',
-                        'seo',
-                        draftContent.seoOgImageUrl,
-                        (url) =>
-                          updateDraft({ ...draftContent, seoOgImageUrl: url })
-                      )
-                    }
-                  />
-                  <ImageSlotEditor
-                    label="Website Favicon"
-                    url={draftContent.seoFaviconUrl}
-                    onChangeUrl={(url) =>
-                      updateDraft({ ...draftContent, seoFaviconUrl: url })
-                    }
-                    onClear={() =>
-                      updateDraft({ ...draftContent, seoFaviconUrl: '' })
-                    }
-                    onOpenPicker={() =>
-                      openImagePicker(
-                        'Select Website Favicon',
-                        'seo',
-                        draftContent.seoFaviconUrl,
-                        (url) =>
-                          updateDraft({ ...draftContent, seoFaviconUrl: url })
-                      )
-                    }
-                  />
-                </section>
-              </div>
+              <SeoManagerTab
+                draft={draftContent}
+                onChange={updateDraft}
+                onPickImage={openImagePicker}
+              />
             )}
 
             {/* 12. FOOTER MANAGEMENT */}
@@ -2867,6 +3019,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
           content={draftContent}
           stages={stages}
           principles={principles}
+          blogPosts={blogPosts}
           onPublish={() => {
             setShowSitePreview(false);
             setShowPublishConfirm(true);

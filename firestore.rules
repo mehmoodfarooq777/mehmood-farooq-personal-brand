@@ -54,6 +54,29 @@ service cloud.firestore {
         && vis.connect is bool;
     }
 
+    function isValidPageSeoEntry(entry) {
+      return entry is map
+        && entry.keys().hasAll(['title', 'description', 'keywords', 'canonicalUrl', 'ogImageUrl'])
+        && entry.keys().hasOnly(['title', 'description', 'keywords', 'canonicalUrl', 'ogImageUrl'])
+        && isValidString(entry.title, 0, 160)
+        && isValidString(entry.description, 0, 320)
+        && isValidString(entry.keywords, 0, 400)
+        && isValidString(entry.canonicalUrl, 0, 300)
+        && isValidString(entry.ogImageUrl, 0, 700000);
+    }
+
+    function isValidPageSeoMap(pageSeo) {
+      return pageSeo is map
+        && pageSeo.keys().hasAll(['about', 'journey', 'business', 'experience', 'contact', 'blog'])
+        && pageSeo.keys().hasOnly(['about', 'journey', 'business', 'experience', 'contact', 'blog'])
+        && isValidPageSeoEntry(pageSeo.about)
+        && isValidPageSeoEntry(pageSeo.journey)
+        && isValidPageSeoEntry(pageSeo.business)
+        && isValidPageSeoEntry(pageSeo.experience)
+        && isValidPageSeoEntry(pageSeo.contact)
+        && isValidPageSeoEntry(pageSeo.blog);
+    }
+
     // -------------------------------------------------------------------------
     // Validation Blueprints
     // -------------------------------------------------------------------------
@@ -66,6 +89,7 @@ service cloud.firestore {
           'location',
           'heroDescription',
           'heroPortraitUrl',
+          'heroPortraitAlt',
           'heroPrimaryCtaLabel',
           'heroPrimaryCtaUrl',
           'heroSecondaryCtaLabel',
@@ -74,6 +98,7 @@ service cloud.firestore {
           'aboutParagraphs',
           'aboutExperience',
           'aboutWorkspaceUrl',
+          'aboutWorkspaceAlt',
           'businessHeading',
           'businessName',
           'businessCountry',
@@ -84,6 +109,7 @@ service cloud.firestore {
           'businessWebsiteUrl',
           'businessLogoUrl',
           'businessShowcaseUrl',
+          'businessShowcaseAlt',
           'businessServices',
           'connectHeading',
           'connectDescription',
@@ -104,6 +130,10 @@ service cloud.firestore {
           'seoKeywords',
           'seoOgImageUrl',
           'seoFaviconUrl',
+          'siteBaseUrl',
+          'canonicalUrl',
+          'googleSiteVerification',
+          'pageSeo',
           'footerDescription',
           'footerCopyright',
           'sectionVisibility',
@@ -118,6 +148,7 @@ service cloud.firestore {
           'location',
           'heroDescription',
           'heroPortraitUrl',
+          'heroPortraitAlt',
           'heroPrimaryCtaLabel',
           'heroPrimaryCtaUrl',
           'heroSecondaryCtaLabel',
@@ -126,6 +157,7 @@ service cloud.firestore {
           'aboutParagraphs',
           'aboutExperience',
           'aboutWorkspaceUrl',
+          'aboutWorkspaceAlt',
           'businessHeading',
           'businessName',
           'businessCountry',
@@ -136,6 +168,7 @@ service cloud.firestore {
           'businessWebsiteUrl',
           'businessLogoUrl',
           'businessShowcaseUrl',
+          'businessShowcaseAlt',
           'businessServices',
           'connectHeading',
           'connectDescription',
@@ -156,6 +189,10 @@ service cloud.firestore {
           'seoKeywords',
           'seoOgImageUrl',
           'seoFaviconUrl',
+          'siteBaseUrl',
+          'canonicalUrl',
+          'googleSiteVerification',
+          'pageSeo',
           'footerDescription',
           'footerCopyright',
           'sectionVisibility',
@@ -163,12 +200,13 @@ service cloud.firestore {
           'updatedAt'
         ])
         && isValidString(data.brandName, 2, 100)
-        && isValidString(data.heroHeading, 2, 100)
+        && isValidString(data.heroHeading, 2, 140)
         && isValidString(data.tagline, 2, 140)
         && isValidString(data.profession, 2, 160)
         && isValidString(data.location, 2, 80)
         && isValidString(data.heroDescription, 10, 500)
         && isValidString(data.heroPortraitUrl, 1, 700000)
+        && isValidString(data.heroPortraitAlt, 0, 240)
         && isValidString(data.heroPrimaryCtaLabel, 1, 60)
         && isValidString(data.heroPrimaryCtaUrl, 1, 300)
         && isValidString(data.heroSecondaryCtaLabel, 1, 60)
@@ -183,6 +221,7 @@ service cloud.firestore {
         && data.aboutExperience.size() <= 10
         && (data.aboutExperience.size() == 0 || (data.aboutExperience[0] is map && data.aboutExperience[0].keys().hasOnly(['role', 'organization', 'period', 'summary'])))
         && isValidString(data.aboutWorkspaceUrl, 1, 700000)
+        && isValidString(data.aboutWorkspaceAlt, 0, 240)
         && isValidString(data.businessHeading, 2, 140)
         && isValidString(data.businessName, 2, 140)
         && isValidString(data.businessCountry, 2, 120)
@@ -193,6 +232,7 @@ service cloud.firestore {
         && isValidString(data.businessWebsiteUrl, 8, 300)
         && isValidString(data.businessLogoUrl, 0, 700000)
         && isValidString(data.businessShowcaseUrl, 1, 700000)
+        && isValidString(data.businessShowcaseAlt, 0, 240)
         && data.businessServices is list
         && data.businessServices.size() <= 12
         && (data.businessServices.size() == 0 || (data.businessServices[0] is map && data.businessServices[0].keys().hasOnly(['title', 'description'])))
@@ -220,6 +260,10 @@ service cloud.firestore {
         && isValidString(data.seoKeywords, 0, 400)
         && isValidString(data.seoOgImageUrl, 0, 700000)
         && isValidString(data.seoFaviconUrl, 0, 700000)
+        && isValidString(data.siteBaseUrl, 0, 300)
+        && isValidString(data.canonicalUrl, 0, 300)
+        && isValidString(data.googleSiteVerification, 0, 200)
+        && isValidPageSeoMap(data.pageSeo)
         && isValidString(data.footerDescription, 0, 300)
         && isValidString(data.footerCopyright, 2, 160)
         && isValidSectionVisibility(data.sectionVisibility)
@@ -296,6 +340,68 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
+    function isValidBlogPost(data) {
+      return data.keys().hasAll([
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'coverImageUrl',
+          'coverImageAlt',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'canonicalUrl',
+          'readTimeMinutes',
+          'publishedDate',
+          'isPublished',
+          'updatedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'coverImageUrl',
+          'coverImageAlt',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'canonicalUrl',
+          'readTimeMinutes',
+          'publishedDate',
+          'isPublished',
+          'updatedByUid',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidString(data.slug, 2, 140)
+        && data.slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        && isValidString(data.title, 3, 160)
+        && isValidString(data.excerpt, 10, 400)
+        && isValidString(data.content, 20, 25000)
+        && isValidString(data.category, 2, 60)
+        && isValidString(data.coverImageUrl, 0, 700000)
+        && isValidString(data.coverImageAlt, 0, 240)
+        && isValidString(data.seoTitle, 0, 160)
+        && isValidString(data.seoDescription, 0, 320)
+        && isValidString(data.seoKeywords, 0, 400)
+        && isValidString(data.canonicalUrl, 0, 300)
+        && (data.readTimeMinutes is int || data.readTimeMinutes is float)
+        && data.readTimeMinutes >= 1
+        && data.readTimeMinutes <= 120
+        && isValidString(data.publishedDate, 4, 40)
+        && data.isPublished is bool
+        && isValidString(data.updatedByUid, 1, 128)
+        && data.updatedByUid == request.auth.uid
+        && data.createdAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
     function isValidMediaItem(data) {
       return data.keys().hasAll([
           'title',
@@ -325,7 +431,7 @@ service cloud.firestore {
         ])
         && isValidString(data.title, 1, 120)
         && isValidString(data.description, 0, 400)
-        && data.category in ['profile', 'hero', 'about', 'journey', 'business', 'seo', 'general']
+        && data.category in ['profile', 'hero', 'about', 'journey', 'business', 'blog', 'seo', 'general']
         && isValidString(data.url, 1, 700000)
         && isValidString(data.mimeType, 1, 80)
         && (data.width is int || data.width is float)
@@ -410,6 +516,7 @@ service cloud.firestore {
           'location',
           'heroDescription',
           'heroPortraitUrl',
+          'heroPortraitAlt',
           'heroPrimaryCtaLabel',
           'heroPrimaryCtaUrl',
           'heroSecondaryCtaLabel',
@@ -418,6 +525,7 @@ service cloud.firestore {
           'aboutParagraphs',
           'aboutExperience',
           'aboutWorkspaceUrl',
+          'aboutWorkspaceAlt',
           'businessHeading',
           'businessName',
           'businessCountry',
@@ -428,6 +536,7 @@ service cloud.firestore {
           'businessWebsiteUrl',
           'businessLogoUrl',
           'businessShowcaseUrl',
+          'businessShowcaseAlt',
           'businessServices',
           'connectHeading',
           'connectDescription',
@@ -448,6 +557,10 @@ service cloud.firestore {
           'seoKeywords',
           'seoOgImageUrl',
           'seoFaviconUrl',
+          'siteBaseUrl',
+          'canonicalUrl',
+          'googleSiteVerification',
+          'pageSeo',
           'footerDescription',
           'footerCopyright',
           'sectionVisibility',
@@ -501,6 +614,39 @@ service cloud.firestore {
           'updatedAt'
         ]);
       allow delete: if isAdmin() && isValidId(principleId);
+    }
+
+    // Blog articles
+    match /blogPosts/{postId} {
+      allow get: if isValidId(postId) && (existing().isPublished == true || isAdmin());
+      allow list: if existing().isPublished == true || isAdmin();
+      allow create: if isAdmin()
+        && isValidId(postId)
+        && isValidBlogPost(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(postId)
+        && isValidBlogPost(incoming())
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'slug',
+          'title',
+          'excerpt',
+          'content',
+          'category',
+          'coverImageUrl',
+          'coverImageAlt',
+          'seoTitle',
+          'seoDescription',
+          'seoKeywords',
+          'canonicalUrl',
+          'readTimeMinutes',
+          'publishedDate',
+          'isPublished',
+          'updatedByUid',
+          'updatedAt'
+        ]);
+      allow delete: if isAdmin() && isValidId(postId);
     }
 
     // Photo and Media Library (admin-only management)

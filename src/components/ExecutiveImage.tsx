@@ -7,6 +7,8 @@ interface ExecutiveImageProps {
   className?: string;
   imgClassName?: string;
   priority?: boolean;
+  width?: number;
+  height?: number;
   fallbackTitle?: string;
 }
 
@@ -16,11 +18,13 @@ export function ExecutiveImage({
   className = '',
   imgClassName = '',
   priority = false,
+  width,
+  height,
   fallbackTitle,
 }: ExecutiveImageProps) {
   const [hasError, setHasError] = useState(false);
 
-  if (hasError) {
+  if (hasError || !src) {
     return (
       <div
         className={`relative flex flex-col items-center justify-center bg-gradient-to-br from-[#151515] via-[#0F0F0F] to-[#080808] p-8 text-center ${className}`}
@@ -42,8 +46,11 @@ export function ExecutiveImage({
       <img
         src={src}
         alt={alt}
+        width={width}
+        height={height}
         referrerPolicy="no-referrer"
         loading={priority ? 'eager' : 'lazy'}
+        fetchPriority={priority ? 'high' : 'auto'}
         decoding={priority ? 'sync' : 'async'}
         onError={() => setHasError(true)}
         className={`h-full w-full object-cover ${imgClassName}`}

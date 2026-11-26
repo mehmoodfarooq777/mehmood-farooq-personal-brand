@@ -1,3 +1,4 @@
+import type { MouseEvent } from 'react';
 import { ArrowDownRight, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
 import { sanitizeHref, type LiveSiteContent } from '../data/siteConfig';
@@ -5,11 +6,21 @@ import { ExecutiveImage } from './ExecutiveImage';
 
 interface HeroSectionProps {
   content: LiveSiteContent;
+  onNavigate?: (path: string) => void;
 }
 
-export function HeroSection({ content }: HeroSectionProps) {
+export function HeroSection({ content, onNavigate }: HeroSectionProps) {
   const isExternalPrimary = content.heroPrimaryCtaUrl.startsWith('http');
   const isExternalSecondary = content.heroSecondaryCtaUrl.startsWith('http');
+
+  const handleCtaClick = (e: MouseEvent<HTMLAnchorElement>, url: string) => {
+    if (!onNavigate || !url.startsWith('/')) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    onNavigate(url);
+  };
 
   return (
     <section
@@ -40,8 +51,8 @@ export function HeroSection({ content }: HeroSectionProps) {
               {content.location}
             </p>
 
-            {/* Primary Display Heading */}
-            <h1 className="font-display text-5xl font-semibold tracking-tight text-[#F5F5F4] text-balance sm:text-6xl lg:text-7xl">
+            {/* Primary Display H1 */}
+            <h1 className="font-display text-4xl font-semibold leading-[1.08] tracking-tight text-[#F5F5F4] text-balance sm:text-5xl lg:text-[3.6rem]">
               {content.heroHeading}
             </h1>
 
@@ -61,6 +72,7 @@ export function HeroSection({ content }: HeroSectionProps) {
             <div className="mt-9 flex flex-wrap items-center gap-4">
               <a
                 href={sanitizeHref(content.heroPrimaryCtaUrl)}
+                onClick={(e) => handleCtaClick(e, content.heroPrimaryCtaUrl)}
                 target={isExternalPrimary ? '_blank' : undefined}
                 rel={isExternalPrimary ? 'noopener noreferrer' : undefined}
                 className="inline-flex min-h-[46px] items-center gap-2.5 bg-[#D4AF37] px-7 py-3 text-sm font-semibold tracking-wide text-[#080808] transition-colors duration-200 hover:bg-[#F2D675] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#F2D675] whitespace-nowrap shrink-0"
@@ -71,6 +83,7 @@ export function HeroSection({ content }: HeroSectionProps) {
 
               <a
                 href={sanitizeHref(content.heroSecondaryCtaUrl)}
+                onClick={(e) => handleCtaClick(e, content.heroSecondaryCtaUrl)}
                 target={isExternalSecondary ? '_blank' : undefined}
                 rel={isExternalSecondary ? 'noopener noreferrer' : undefined}
                 className="inline-flex min-h-[46px] items-center gap-2.5 border border-[#D4AF37]/45 bg-[#151515] px-7 py-3 text-sm font-medium tracking-wide text-[#F5F5F4] transition-colors duration-200 hover:border-[#F2D675] hover:text-[#F2D675] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#D4AF37] whitespace-nowrap shrink-0"
@@ -92,7 +105,12 @@ export function HeroSection({ content }: HeroSectionProps) {
               <div className="relative aspect-[3/4] w-full overflow-hidden lg:aspect-auto lg:h-full lg:min-h-[500px]">
                 <ExecutiveImage
                   src={content.heroPortraitUrl}
-                  alt={`${content.brandName} — ${content.profession}`}
+                  alt={
+                    content.heroPortraitAlt ||
+                    `${content.brandName} — ${content.profession}`
+                  }
+                  width={900}
+                  height={1200}
                   priority
                   className="h-full w-full"
                   imgClassName="object-top transition-transform duration-500 hover:scale-[1.02]"

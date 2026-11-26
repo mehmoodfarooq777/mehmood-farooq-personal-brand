@@ -1,16 +1,34 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSection } from './components/HeroSection';
 import { AboutSection } from './components/AboutSection';
 import { JourneySection } from './components/JourneySection';
 import { BusinessSection } from './components/BusinessSection';
 import { PrinciplesSection } from './components/PrinciplesSection';
+import { BlogPreviewSection } from './components/BlogPreviewSection';
 import { ConnectSection } from './components/ConnectSection';
 import { Footer } from './components/Footer';
-import { AdminDashboard } from './components/AdminDashboard';
+import {
+  AboutPage,
+  BlogArticlePage,
+  BlogListPage,
+  BusinessPage,
+  ContactPage,
+  ExperiencePage,
+  JourneyPage,
+} from './components/PublicPages';
 import { WelcomeIntro } from './components/WelcomeIntro';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { useSiteContent } from './hooks/useSiteContent';
+import {
+  applyDynamicSeoMetadata,
+  useSiteContent,
+} from './hooks/useSiteContent';
+
+const AdminDashboard = lazy(() =>
+  import('./components/AdminDashboard').then((mod) => ({
+    default: mod.AdminDashboard,
+  }))
+);
 
 const WELCOME_SESSION_KEY = 'mf_welcome_seen';
 
@@ -22,7 +40,11 @@ function normalizePath(pathname: string): string {
 type AdminRoute = '/admin' | '/admin/login' | '/admin/dashboard';
 
 function getAdminRoute(path: string): AdminRoute | null {
-  if (path === '/admin' || path === '/admin/login' || path === '/admin/dashboard') {
+  if (
+    path === '/admin' ||
+    path === '/admin/login' ||
+    path === '/admin/dashboard'
+  ) {
     return path;
   }
   return null;
@@ -47,7 +69,8 @@ export default function App() {
   const [currentPath, setCurrentPath] = useState<string>(() =>
     normalizePath(window.location.pathname)
   );
-  const { content, journeyStages, principles, loading } = useSiteContent();
+  const { content, journeyStages, principles, blogPosts, loading } =
+    useSiteContent();
   const [showWelcome, setShowWelcome] = useState<boolean>(() =>
     shouldShowInitialWelcome(content.welcomeEnabled)
   );
@@ -59,6 +82,11 @@ export default function App() {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
+
+  // Sync page title, meta description, canonical URL, Open Graph, and JSON-LD on every route or CMS update
+  useEffect(() => {
+    applyDynamicSeoMetadata(content, currentPath, blogPosts);
+  }, [content, currentPath, blogPosts]);
 
   // Dismiss welcome overlay immediately if Firestore specifies welcomeEnabled === false
   useEffect(() => {
@@ -87,10 +115,99 @@ export default function App() {
 
   const adminRoute = getAdminRoute(currentPath);
 
+  function renderPublicMain() {
+    if (currentPath === '/about') {
+      return (
+        <AboutPage
+          content={content}
+          principles={principles}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+    if (currentPath === '/journey') {
+      return (
+        <JourneyPage
+          content={content}
+          stages={journeyStages}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+    if (currentPath === '/business') {
+      return <BusinessPage content={content} onNavigate={navigateTo} />;
+    }
+    if (currentPath === '/experience') {
+      return (
+        <ExperiencePage
+          content={content}
+          principles={principles}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+    if (currentPath === '/contact') {
+      return <ContactPage content={content} onNavigate={navigateTo} />;
+    }
+    if (currentPath === '/blog') {
+      return (
+        <BlogListPage
+          content={content}
+          posts={blogPosts}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+    if (currentPath.startsWith('/blog/')) {
+      const slug = currentPath.slice('/blog/'.length);
+      return (
+        <BlogArticlePage
+          slug={slug}
+          content={content}
+          posts={blogPosts}
+          onNavigate={navigateTo}
+        />
+      );
+    }
+
+    // Default Homepage ('/')
+    return (
+      <>
+        <HeroSection content={content} onNavigate={navigateTo} />
+        {content.sectionVisibility.about && (
+          <AboutSection content={content} onNavigate={navigateTo} />
+        )}
+        {content.sectionVisibility.journey && (
+          <JourneySection stages={journeyStages} onNavigate={navigateTo} />
+        )}
+        {content.sectionVisibility.business && (
+          <BusinessSection content={content} onNavigate={navigateTo} />
+        )}
+        {content.sectionVisibility.principles && (
+          <PrinciplesSection items={principles} />
+        )}
+        <BlogPreviewSection posts={blogPosts} onNavigate={navigateTo} />
+        {content.sectionVisibility.connect && (
+          <ConnectSection content={content} />
+        )}
+      </>
+    );
+  }
+
   return (
     <ErrorBoundary>
       {adminRoute ? (
-        <AdminDashboard route={adminRoute} onNavigate={navigateTo} />
+        <Suspense
+          fallback={
+            <div className="flex min-h-screen items-center justify-center bg-[#080808] px-6 text-[#F5F5F4]">
+              <div className="border border-[#D4AF37]/25 bg-[#151515] px-8 py-6 text-sm tracking-wide text-[#B8B8B3]">
+                Loading private administrator portal...
+              </div>
+            </div>
+          }
+        >
+          <AdminDashboard route={adminRoute} onNavigate={navigateTo} />
+        </Suspense>
       ) : (
         <div className="min-h-screen bg-[#080808] text-[#F5F5F4]">
           {showWelcome && content.welcomeEnabled && (
@@ -114,26 +231,13 @@ export default function App() {
           <Navbar
             brandName={content.brandName}
             sectionVisibility={content.sectionVisibility}
+            currentPath={currentPath}
+            onNavigate={navigateTo}
           />
 
-          <main id="main-content">
-            <HeroSection content={content} />
-            {content.sectionVisibility.about && <AboutSection content={content} />}
-            {content.sectionVisibility.journey && (
-              <JourneySection stages={journeyStages} />
-            )}
-            {content.sectionVisibility.business && (
-              <BusinessSection content={content} />
-            )}
-            {content.sectionVisibility.principles && (
-              <PrinciplesSection items={principles} />
-            )}
-            {content.sectionVisibility.connect && (
-              <ConnectSection content={content} />
-            )}
-          </main>
+          <main id="main-content">{renderPublicMain()}</main>
 
-          <Footer content={content} />
+          <Footer content={content} onNavigate={navigateTo} />
         </div>
       )}
     </ErrorBoundary>
