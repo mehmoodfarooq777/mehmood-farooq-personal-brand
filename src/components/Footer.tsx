@@ -109,7 +109,7 @@ export function Footer({ content }: FooterProps) {
               rel="noopener noreferrer"
               className="transition-colors hover:text-[#F2D675] whitespace-nowrap"
             >
-              TRD LLC
+              {content.businessName}
             </a>
             <a
               href={`mailto:${content.publicEmail}`}
@@ -150,7 +150,9 @@ export function Footer({ content }: FooterProps) {
         <div className="mt-8 flex flex-col items-start justify-between gap-3 text-xs tracking-wide text-[#8C8C86] sm:flex-row sm:items-center">
           <p>{content.footerCopyright}</p>
           <p>
-            {content.businessName} · {content.businessRegistration}
+            {content.businessName} · Registered in{' '}
+            {content.businessState || content.businessRegistration},{' '}
+            {content.businessCountry}
           </p>
         </div>
       </div>

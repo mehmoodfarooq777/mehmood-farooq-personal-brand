@@ -587,18 +587,30 @@ export function BusinessEditor({
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <AdminInput
-            label="Registration"
-            value={draft.businessRegistration}
+            label="Country"
+            value={draft.businessCountry}
             maxLength={120}
-            onChange={(v) => onChange({ ...draft, businessRegistration: v })}
+            onChange={(v) => onChange({ ...draft, businessCountry: v })}
           />
           <AdminInput
-            label="Industry"
-            value={draft.businessIndustry}
+            label="State / Registration"
+            value={draft.businessState}
             maxLength={120}
-            onChange={(v) => onChange({ ...draft, businessIndustry: v })}
+            onChange={(v) =>
+              onChange({
+                ...draft,
+                businessState: v,
+                businessRegistration: v,
+              })
+            }
           />
         </div>
+        <AdminInput
+          label="Industry"
+          value={draft.businessIndustry}
+          maxLength={120}
+          onChange={(v) => onChange({ ...draft, businessIndustry: v })}
+        />
         <AdminTextarea
           label="Company Description"
           value={draft.businessDescription}
@@ -608,7 +620,7 @@ export function BusinessEditor({
         />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <AdminInput
-            label="Business Website Link"
+            label="Company Website URL"
             value={draft.businessWebsiteUrl}
             maxLength={300}
             onChange={(v) => onChange({ ...draft, businessWebsiteUrl: v })}

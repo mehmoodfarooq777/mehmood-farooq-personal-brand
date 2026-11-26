@@ -106,6 +106,8 @@ export interface LiveSiteContent {
   aboutWorkspaceUrl: string;
   businessHeading: string;
   businessName: string;
+  businessCountry: string;
+  businessState: string;
   businessRegistration: string;
   businessIndustry: string;
   businessDescription: string;
@@ -195,10 +197,10 @@ export const SITE_CONFIG = {
     experience: [
       {
         role: 'Founder & Business Owner',
-        organization: 'Titan Route Dispatch (TRD LLC)',
+        organization: 'TITAN ROUTE DISPATCH (TRD) LLC',
         period: 'Present',
         summary:
-          'Leading dispatch operations, carrier support, and client growth across the US freight market.',
+          'Leading United States-based dispatch operations, carrier support, and client growth for TITAN ROUTE DISPATCH (TRD) LLC (Wyoming, USA).',
       },
       {
         role: 'Logistics & Dispatch Operations',
@@ -261,13 +263,15 @@ export const SITE_CONFIG = {
   },
 
   business: {
-    kicker: 'Venture',
+    kicker: 'United States Venture',
     heading: 'Business & Entrepreneurship',
-    name: 'Titan Route Dispatch (TRD LLC)',
+    name: 'TITAN ROUTE DISPATCH (TRD) LLC',
+    country: 'United States of America',
+    state: 'Wyoming, USA',
     registration: 'Wyoming, USA',
     industry: 'Trucking and Logistics',
     description:
-      'Providing professional dispatch support and logistics solutions for the US trucking industry.',
+      'A United States-based trucking and logistics company registered in Wyoming, USA, providing professional dispatch support and freight solutions for the US trucking industry.',
     ctaLabel: 'Visit Business Website',
     url: 'https://trdispatch.us/',
     services: [
@@ -381,6 +385,8 @@ export const DEFAULT_LIVE_CONTENT: LiveSiteContent = {
   aboutWorkspaceUrl: SITE_CONFIG.images.aboutWorkspace.src,
   businessHeading: SITE_CONFIG.business.heading,
   businessName: SITE_CONFIG.business.name,
+  businessCountry: SITE_CONFIG.business.country,
+  businessState: SITE_CONFIG.business.state,
   businessRegistration: SITE_CONFIG.business.registration,
   businessIndustry: SITE_CONFIG.business.industry,
   businessDescription: SITE_CONFIG.business.description,
@@ -405,9 +411,9 @@ export const DEFAULT_LIVE_CONTENT: LiveSiteContent = {
   seoTitle:
     'Mehmood Farooq | Entrepreneur & Logistics Professional — Building Beyond Borders',
   seoDescription:
-    'Mehmood Farooq is a young entrepreneur from Pakistan and founder of Titan Route Dispatch (TRD LLC), building international business and US logistics solutions.',
+    'Mehmood Farooq is an entrepreneur from Pakistan and founder of TITAN ROUTE DISPATCH (TRD) LLC, a United States-based trucking and logistics company registered in Wyoming, USA.',
   seoKeywords:
-    'Mehmood Farooq, Titan Route Dispatch, TRD LLC, US Trucking Dispatch, Logistics Entrepreneur, Pakistan Entrepreneur, Building Beyond Borders',
+    'Mehmood Farooq, TITAN ROUTE DISPATCH (TRD) LLC, TRD LLC, US Trucking Dispatch, Wyoming Logistics Company, United States Trucking, Building Beyond Borders',
   seoOgImageUrl: SITE_CONFIG.images.heroPortrait.src,
   seoFaviconUrl: '',
   footerDescription: SITE_CONFIG.brand.tagline,
@@ -442,17 +448,59 @@ export function normalizeSiteConfig(
       : DEFAULT_LIVE_CONTENT.aboutParagraphs;
 
   const rawVis = (raw.sectionVisibility || {}) as Partial<SectionVisibility>;
+  const upgradeLegacyCompanyText = (val: unknown, fallback: string): string => {
+    if (typeof val !== 'string' || !val.trim()) return fallback;
+    return val.replace(/Titan Route Dispatch\s*\(TRD LLC\)/gi, 'TITAN ROUTE DISPATCH (TRD) LLC');
+  };
 
-  return {
+  const merged = {
     ...DEFAULT_LIVE_CONTENT,
     ...(raw as Partial<LiveSiteContent>),
+  };
+
+  const resolvedState =
+    typeof raw.businessState === 'string' && raw.businessState.trim()
+      ? raw.businessState
+      : typeof raw.businessRegistration === 'string' && raw.businessRegistration.trim()
+        ? raw.businessRegistration
+        : DEFAULT_LIVE_CONTENT.businessState;
+
+  const resolvedCountry =
+    typeof raw.businessCountry === 'string' && raw.businessCountry.trim()
+      ? raw.businessCountry
+      : DEFAULT_LIVE_CONTENT.businessCountry;
+
+  const normalizedExperience = (
+    Array.isArray(raw.aboutExperience)
+      ? (raw.aboutExperience as AboutExperienceItem[])
+      : DEFAULT_LIVE_CONTENT.aboutExperience
+  ).map((exp) => ({
+    ...exp,
+    organization: upgradeLegacyCompanyText(exp.organization, exp.organization),
+  }));
+
+  return {
+    ...merged,
+    businessName: upgradeLegacyCompanyText(
+      merged.businessName,
+      DEFAULT_LIVE_CONTENT.businessName
+    ),
+    businessCountry: resolvedCountry,
+    businessState: resolvedState,
+    businessRegistration: resolvedState,
+    seoDescription: upgradeLegacyCompanyText(
+      merged.seoDescription,
+      DEFAULT_LIVE_CONTENT.seoDescription
+    ),
+    seoKeywords: upgradeLegacyCompanyText(
+      merged.seoKeywords,
+      DEFAULT_LIVE_CONTENT.seoKeywords
+    ),
     aboutParagraphs:
       aboutParagraphs.length > 0
         ? aboutParagraphs
         : DEFAULT_LIVE_CONTENT.aboutParagraphs,
-    aboutExperience: Array.isArray(raw.aboutExperience)
-      ? (raw.aboutExperience as AboutExperienceItem[])
-      : DEFAULT_LIVE_CONTENT.aboutExperience,
+    aboutExperience: normalizedExperience,
     businessServices: Array.isArray(raw.businessServices)
       ? (raw.businessServices as BusinessServiceItem[])
       : DEFAULT_LIVE_CONTENT.businessServices,

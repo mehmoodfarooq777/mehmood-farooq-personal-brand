@@ -157,7 +157,9 @@ export function ConnectSection({
                 <span>{content.publicEmail}</span>
               </a>
               <p className="mt-2.5 text-xs text-[#8C8C86]">
-                Registered in {content.businessRegistration}
+                United States-Based Business · Registered in{' '}
+                {content.businessState || content.businessRegistration},{' '}
+                {content.businessCountry}
               </p>
             </div>
 

@@ -58,7 +58,7 @@ export function BusinessSection({ content }: BusinessSectionProps) {
                 ) : (
                   <Truck className="h-4 w-4 stroke-[1.75]" aria-hidden="true" />
                 )}
-                <span>Featured Business</span>
+                <span>United States-Based Venture</span>
               </div>
 
               <h3 className="mt-5 font-display text-3xl font-semibold tracking-tight text-[#F5F5F4] text-balance sm:text-4xl">
@@ -73,9 +73,15 @@ export function BusinessSection({ content }: BusinessSectionProps) {
 
               <dl className="mt-6 space-y-2.5 border-t border-white/10 pt-5 text-xs tracking-wider uppercase">
                 <div className="flex items-center justify-between gap-4">
-                  <dt className="text-[#8C8C86]">Registration</dt>
+                  <dt className="text-[#8C8C86]">Country</dt>
+                  <dd className="font-medium text-[#F5F5F4]">
+                    {content.businessCountry}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-[#8C8C86]">Registered State</dt>
                   <dd className="font-medium text-[#F2D675]">
-                    {content.businessRegistration}
+                    {content.businessState || content.businessRegistration}
                   </dd>
                 </div>
                 <div className="flex items-center justify-between gap-4">

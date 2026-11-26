@@ -32,15 +32,7 @@ export function AboutSection({ content }: AboutSectionProps) {
             <dl className="grid grid-cols-1 gap-4 border border-white/10 bg-[#151515] p-6 sm:grid-cols-2 lg:grid-cols-1">
               <div className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-3">
                 <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
-                  Industry
-                </dt>
-                <dd className="text-right text-sm font-medium text-[#F5F5F4]">
-                  {content.businessIndustry}
-                </dd>
-              </div>
-              <div className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-3">
-                <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
-                  Venture
+                  Company
                 </dt>
                 <dd className="text-right text-sm font-medium text-[#F2D675]">
                   {content.businessName}
@@ -48,15 +40,31 @@ export function AboutSection({ content }: AboutSectionProps) {
               </div>
               <div className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-3">
                 <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
-                  Registration
+                  Company Country
                 </dt>
                 <dd className="text-right text-sm font-medium text-[#F5F5F4]">
-                  {content.businessRegistration}
+                  {content.businessCountry}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-3">
+                <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
+                  Registered State
+                </dt>
+                <dd className="text-right text-sm font-medium text-[#F5F5F4]">
+                  {content.businessState || content.businessRegistration}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 border-b border-white/10 pb-3">
+                <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
+                  Industry
+                </dt>
+                <dd className="text-right text-sm font-medium text-[#F5F5F4]">
+                  {content.businessIndustry}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-4">
                 <dt className="text-xs font-medium tracking-wider text-[#9E9E98] uppercase">
-                  Base
+                  Personal Base
                 </dt>
                 <dd className="text-right text-sm font-medium text-[#F5F5F4]">
                   {content.location}

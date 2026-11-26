@@ -76,6 +76,8 @@ service cloud.firestore {
           'aboutWorkspaceUrl',
           'businessHeading',
           'businessName',
+          'businessCountry',
+          'businessState',
           'businessRegistration',
           'businessIndustry',
           'businessDescription',
@@ -126,6 +128,8 @@ service cloud.firestore {
           'aboutWorkspaceUrl',
           'businessHeading',
           'businessName',
+          'businessCountry',
+          'businessState',
           'businessRegistration',
           'businessIndustry',
           'businessDescription',
@@ -181,6 +185,8 @@ service cloud.firestore {
         && isValidString(data.aboutWorkspaceUrl, 1, 700000)
         && isValidString(data.businessHeading, 2, 140)
         && isValidString(data.businessName, 2, 140)
+        && isValidString(data.businessCountry, 2, 120)
+        && isValidString(data.businessState, 2, 120)
         && isValidString(data.businessRegistration, 2, 120)
         && isValidString(data.businessIndustry, 2, 120)
         && isValidString(data.businessDescription, 10, 600)
@@ -414,6 +420,8 @@ service cloud.firestore {
           'aboutWorkspaceUrl',
           'businessHeading',
           'businessName',
+          'businessCountry',
+          'businessState',
           'businessRegistration',
           'businessIndustry',
           'businessDescription',

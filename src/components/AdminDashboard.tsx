@@ -738,7 +738,14 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         DEFAULT_LIVE_CONTENT.aboutWorkspaceUrl,
       businessHeading: clampString(source.businessHeading, 140),
       businessName: clampString(source.businessName, 140),
-      businessRegistration: clampString(source.businessRegistration, 120),
+      businessCountry:
+        clampString(source.businessCountry, 120) || 'United States of America',
+      businessState:
+        clampString(source.businessState || source.businessRegistration, 120) ||
+        'Wyoming, USA',
+      businessRegistration:
+        clampString(source.businessState || source.businessRegistration, 120) ||
+        'Wyoming, USA',
       businessIndustry: clampString(source.businessIndustry, 120),
       businessDescription: clampString(source.businessDescription, 600),
       businessWebsiteUrl: clampString(source.businessWebsiteUrl, 300),
@@ -805,6 +812,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     }
     if (snapshot.heroDescription.length < 10) {
       return 'Hero description must be at least 10 characters.';
+    }
+    if (snapshot.businessName.length < 2 || snapshot.businessCountry.length < 2 || snapshot.businessState.length < 2 || snapshot.businessIndustry.length < 2) {
+      return 'Company name, country, state, and industry must each be at least 2 characters.';
     }
     if (snapshot.businessDescription.length < 10) {
       return 'Business description must be at least 10 characters.';
@@ -954,7 +964,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         {
           id: 'default_business_highway',
           title: 'US Freight Highway (Default)',
-          description: 'Titan Route Dispatch logistics showcase photograph.',
+          description: 'TITAN ROUTE DISPATCH (TRD) LLC logistics showcase photograph.',
           category: 'business',
           url: SITE_CONFIG.images.businessShowcase.src,
         },
@@ -1838,7 +1848,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                           { id: 'about', label: 'About Me & Roles' },
                           { id: 'media', label: 'Photo & Media Library' },
                           { id: 'journey', label: 'Journey Timeline' },
-                          { id: 'business', label: 'Business (TRD LLC)' },
+                          { id: 'business', label: 'Business Management' },
                           { id: 'social', label: 'Social Media' },
                           { id: 'welcome', label: 'Welcome Animation' },
                           { id: 'seo', label: 'SEO & Favicon' },
