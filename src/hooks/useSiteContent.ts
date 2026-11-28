@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocFromServer,
+  onSnapshot,
+  query,
+  where,
+} from 'firebase/firestore';
 import {
   DEFAULT_BLOG_POSTS,
   DEFAULT_LIVE_CONTENT,
@@ -64,6 +71,8 @@ interface PublicSiteState {
   principles: PrincipleItem[];
   blogPosts: BlogPost[];
   loading: boolean;
+  hasPublishedConfig: boolean;
+  lastSyncedAt: number | null;
 }
 
 export function useSiteContent() {
@@ -76,44 +85,67 @@ export function useSiteContent() {
     principles: SITE_CONFIG.principles.items,
     blogPosts: DEFAULT_BLOG_POSTS,
     loading: true,
+    hasPublishedConfig: false,
+    lastSyncedAt: null,
   }));
 
   useEffect(() => {
     let active = true;
+    const publicConfigRef = doc(db, 'siteConfig', 'public');
 
-    async function loadPublicData() {
-      try {
-        const [configSnap, stagesSnap, principlesSnap, blogSnap] =
-          await Promise.all([
-            getDoc(doc(db, 'siteConfig', 'public')),
-            getDocs(
-              query(
-                collection(db, 'journeyStages'),
-                where('isPublished', '==', true)
-              )
-            ),
-            getDocs(
-              query(
-                collection(db, 'principles'),
-                where('isPublished', '==', true)
-              )
-            ),
-            getDocs(
-              query(
-                collection(db, 'blogPosts'),
-                where('isPublished', '==', true)
-              )
-            ),
-          ]);
-
+    // Force an authoritative server fetch on initial load to avoid stale browser cache
+    void getDocFromServer(publicConfigRef)
+      .then((snap) => {
         if (!active) return;
+        const exists = snap.exists();
+        const nextContent = exists
+          ? normalizeSiteConfig(snap.data() as Record<string, unknown>)
+          : DEFAULT_LIVE_CONTENT;
+        writeCachedWelcomePrefs(nextContent);
+        setState((prev) => ({
+          ...prev,
+          content: nextContent,
+          hasPublishedConfig: exists,
+          loading: false,
+          lastSyncedAt: Date.now(),
+        }));
+      })
+      .catch(() => {
+        // Real-time listener below handles cached/offline state cleanly
+      });
 
-        const nextContent = configSnap.exists()
+    // 1. Live published site configuration listener
+    const unsubConfig = onSnapshot(
+      publicConfigRef,
+      (configSnap) => {
+        if (!active) return;
+        const exists = configSnap.exists();
+        const nextContent = exists
           ? normalizeSiteConfig(configSnap.data() as Record<string, unknown>)
           : DEFAULT_LIVE_CONTENT;
 
         writeCachedWelcomePrefs(nextContent);
+        setState((prev) => ({
+          ...prev,
+          content: nextContent,
+          hasPublishedConfig: exists,
+          loading: false,
+          lastSyncedAt: Date.now(),
+        }));
+      },
+      (err) => {
+        console.warn('Public siteConfig listener fell back to defaults:', err);
+        if (active) {
+          setState((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    );
 
+    // 2. Live published journey stages listener
+    const unsubStages = onSnapshot(
+      query(collection(db, 'journeyStages'), where('isPublished', '==', true)),
+      (stagesSnap) => {
+        if (!active) return;
         const nextStages: JourneyStage[] = stagesSnap.empty
           ? SITE_CONFIG.journey.stages
           : stagesSnap.docs
@@ -132,6 +164,22 @@ export function useSiteContent() {
               })
               .sort((a, b) => a.order - b.order);
 
+        setState((prev) => ({
+          ...prev,
+          journeyStages: nextStages,
+          lastSyncedAt: Date.now(),
+        }));
+      },
+      (err) => {
+        console.warn('Journey stages listener fell back to defaults:', err);
+      }
+    );
+
+    // 3. Live published executive principles listener
+    const unsubPrinciples = onSnapshot(
+      query(collection(db, 'principles'), where('isPublished', '==', true)),
+      (principlesSnap) => {
+        if (!active) return;
         const nextPrinciples: PrincipleItem[] = principlesSnap.empty
           ? SITE_CONFIG.principles.items
           : principlesSnap.docs
@@ -141,6 +189,22 @@ export function useSiteContent() {
               }))
               .sort((a, b) => a.order - b.order);
 
+        setState((prev) => ({
+          ...prev,
+          principles: nextPrinciples,
+          lastSyncedAt: Date.now(),
+        }));
+      },
+      (err) => {
+        console.warn('Principles listener fell back to defaults:', err);
+      }
+    );
+
+    // 4. Live published blog articles listener
+    const unsubBlogs = onSnapshot(
+      query(collection(db, 'blogPosts'), where('isPublished', '==', true)),
+      (blogSnap) => {
+        if (!active) return;
         const nextPosts: BlogPost[] = blogSnap.empty
           ? DEFAULT_BLOG_POSTS
           : blogSnap.docs
@@ -152,24 +216,23 @@ export function useSiteContent() {
                 (b.publishedDate || '').localeCompare(a.publishedDate || '')
               );
 
-        setState({
-          content: nextContent,
-          journeyStages: nextStages,
-          principles: nextPrinciples,
+        setState((prev) => ({
+          ...prev,
           blogPosts: nextPosts,
-          loading: false,
-        });
-      } catch (err) {
-        console.warn('Using bundled default site content:', err);
-        if (active) {
-          setState((prev) => ({ ...prev, loading: false }));
-        }
+          lastSyncedAt: Date.now(),
+        }));
+      },
+      (err) => {
+        console.warn('Blog posts listener fell back to defaults:', err);
       }
-    }
+    );
 
-    void loadPublicData();
     return () => {
       active = false;
+      unsubConfig();
+      unsubStages();
+      unsubPrinciples();
+      unsubBlogs();
     };
   }, []);
 

@@ -17,6 +17,10 @@ import {
   formatBytes,
   optimizeImageForMediaLibrary,
 } from '../../lib/imageOptimizer';
+import {
+  StorageUploadError,
+  uploadImageToStorage,
+} from '../../lib/storageMedia';
 
 export type ImageAssignTarget =
   | 'heroPortraitUrl'
@@ -29,11 +33,13 @@ export type ImageAssignTarget =
 interface MediaLibraryTabProps {
   mediaItems: MediaItemRecord[];
   saving: boolean;
+  storageStatus?: 'checking' | 'ready' | 'unprovisioned';
   onUploadMedia: (input: {
     title: string;
     description: string;
     category: MediaCategory;
     url: string;
+    storagePath?: string;
     mimeType: string;
     width: number;
     height: number;
@@ -62,6 +68,7 @@ const CATEGORIES: { id: 'all' | MediaCategory; label: string }[] = [
 export function MediaLibraryTab({
   mediaItems,
   saving,
+  storageStatus = 'checking',
   onUploadMedia,
   onUpdateMedia,
   onDeleteMedia,
@@ -72,6 +79,7 @@ export function MediaLibraryTab({
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatus, setUploadStatus] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [fallbackPendingFiles, setFallbackPendingFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
 
   const [externalUrl, setExternalUrl] = useState('');
@@ -81,17 +89,68 @@ export function MediaLibraryTab({
 
   async function processFiles(files: FileList | File[]) {
     setUploadError('');
+    setFallbackPendingFiles([]);
     const list = Array.from(files);
     if (list.length === 0) return;
 
     for (let i = 0; i < list.length; i++) {
       const file = list[i];
-      setUploadStatus(`Processing ${file.name} (${i + 1} of ${list.length})...`);
+      setUploadStatus(`Uploading ${file.name} (${i + 1} of ${list.length}) to Firebase Storage...`);
       setUploadProgress(5);
 
       try {
+        const uploaded = await uploadImageToStorage(file, {
+          maxDimension: uploadCategory === 'seo' ? 1200 : 1800,
+          onProgress: (pct) => setUploadProgress(pct),
+        });
+
+        await onUploadMedia({
+          title: uploaded.suggestedTitle,
+          description: '',
+          category: uploadCategory,
+          url: uploaded.url,
+          storagePath: uploaded.storagePath,
+          mimeType: uploaded.mimeType,
+          width: uploaded.width,
+          height: uploaded.height,
+          sizeBytes: uploaded.sizeBytes,
+        });
+        setUploadProgress(100);
+      } catch (err) {
+        if (err instanceof StorageUploadError) {
+          setUploadError(err.message);
+          setFallbackPendingFiles(list.slice(i));
+          setUploadProgress(null);
+          setUploadStatus('');
+          return;
+        }
+        setUploadError(
+          err instanceof Error ? err.message : `Failed uploading ${file.name}`
+        );
+      }
+    }
+
+    window.setTimeout(() => {
+      setUploadProgress(null);
+      setUploadStatus('');
+    }, 900);
+  }
+
+  async function processCompactFallback() {
+    if (fallbackPendingFiles.length === 0) return;
+    const filesToProcess = [...fallbackPendingFiles];
+    setUploadError('');
+    setFallbackPendingFiles([]);
+
+    for (let i = 0; i < filesToProcess.length; i++) {
+      const file = filesToProcess[i];
+      setUploadStatus(`Compressing ${file.name} (${i + 1} of ${filesToProcess.length}) for compact storage...`);
+      setUploadProgress(10);
+
+      try {
         const result = await optimizeImageForMediaLibrary(file, {
-          maxDimension: uploadCategory === 'seo' ? 1200 : 1440,
+          maxDimension: uploadCategory === 'seo' ? 1024 : 1200,
+          maxOutputChars: 220_000,
           onProgress: (pct) => setUploadProgress(pct),
         });
 
@@ -100,6 +159,7 @@ export function MediaLibraryTab({
           description: '',
           category: uploadCategory,
           url: result.dataUrl,
+          storagePath: '',
           mimeType: result.mimeType,
           width: result.width,
           height: result.height,
@@ -144,19 +204,26 @@ export function MediaLibraryTab({
       return;
     }
 
-    await onUploadMedia({
-      title: cleanTitle,
-      description: '',
-      category: uploadCategory,
-      url: cleanUrl,
-      mimeType: 'image/jpeg',
-      width: 0,
-      height: 0,
-      sizeBytes: cleanUrl.length,
-    });
+    try {
+      await onUploadMedia({
+        title: cleanTitle,
+        description: '',
+        category: uploadCategory,
+        url: cleanUrl,
+        storagePath: '',
+        mimeType: 'image/jpeg',
+        width: 0,
+        height: 0,
+        sizeBytes: cleanUrl.length,
+      });
 
-    setExternalUrl('');
-    setExternalTitle('');
+      setExternalUrl('');
+      setExternalTitle('');
+    } catch (err) {
+      setUploadError(
+        err instanceof Error ? err.message : 'Unable to add external image URL.'
+      );
+    }
   }
 
   const visibleItems =
@@ -166,6 +233,17 @@ export function MediaLibraryTab({
 
   return (
     <div className="space-y-8">
+      {storageStatus === 'unprovisioned' && (
+        <div className="border border-amber-500/40 bg-amber-950/25 px-5 py-4 text-xs leading-relaxed text-amber-200">
+          <p className="font-semibold tracking-wider text-[#F2D675] uppercase">
+            Firebase Storage Setup Notice
+          </p>
+          <p className="mt-1">
+            Your Firebase Storage bucket is not activated yet in Firebase Console (Build → Storage → Get Started). Full-resolution CDN uploads require activating Storage and applying <code className="text-[#F2D675]">storage.rules</code>; otherwise, you can choose the explicit compact database fallback (&le; 220 KB) when prompted.
+          </p>
+        </div>
+      )}
+
       {/* Upload Dropzone & External URL Import */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <div
@@ -187,7 +265,7 @@ export function MediaLibraryTab({
                 Upload Photographs
               </h2>
               <p className="mt-1 text-xs text-[#9E9E98]">
-                JPEG, PNG, WebP, or SVG up to 10 MB. Multiple files supported; optimized automatically for fast web delivery.
+                JPEG, PNG, WebP, or SVG up to 10 MB. Uploaded to Firebase Storage for fast live delivery across all devices.
               </p>
             </div>
 
@@ -245,9 +323,31 @@ export function MediaLibraryTab({
           )}
 
           {uploadError && (
-            <p role="alert" className="mt-3 text-xs font-medium text-rose-400">
-              {uploadError}
-            </p>
+            <div role="alert" className="mt-4 border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200">
+              <p className="font-medium">{uploadError}</p>
+              {fallbackPendingFiles.length > 0 && (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={saving}
+                    onClick={() => void processCompactFallback()}
+                    className="inline-flex min-h-[34px] items-center bg-[#D4AF37] px-3.5 py-1.5 text-[11px] font-semibold tracking-wider text-[#080808] uppercase hover:bg-[#F2D675]"
+                  >
+                    Use Compact Database Fallback Instead ({fallbackPendingFiles.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFallbackPendingFiles([]);
+                      setUploadError('');
+                    }}
+                    className="inline-flex min-h-[34px] items-center border border-white/20 px-3 py-1.5 text-[11px] text-[#D4D4D0] hover:text-[#F5F5F4]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -335,7 +435,7 @@ export function MediaLibraryTab({
         <div className="border border-white/10 bg-[#151515] p-12 text-center">
           <ImageIcon className="mx-auto h-8 w-8 text-[#8C8C86]" aria-hidden="true" />
           <p className="mt-3 text-sm text-[#B8B8B3]">
-            No photographs in this category yet. Upload images above or click Sync Default Content.
+            No photographs in this category yet. Upload images above or click Sync Missing Default Media.
           </p>
         </div>
       ) : (
@@ -378,20 +478,72 @@ function MediaAssetCard({
   const [assignTarget, setAssignTarget] =
     useState<ImageAssignTarget>('heroPortraitUrl');
   const [assignedFeedback, setAssignedFeedback] = useState(false);
+  const [replacing, setReplacing] = useState(false);
+  const [cardError, setCardError] = useState('');
+  const [pendingReplaceFile, setPendingReplaceFile] = useState<File | null>(null);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   async function handleReplaceFile(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
-    const optimized = await optimizeImageForMediaLibrary(file);
-    await onUpdate(item, {
-      url: optimized.dataUrl,
-      mimeType: optimized.mimeType,
-      width: optimized.width,
-      height: optimized.height,
-      sizeBytes: optimized.sizeBytes,
-    });
+    setCardError('');
+    setPendingReplaceFile(null);
+    setReplacing(true);
+
+    try {
+      const uploaded = await uploadImageToStorage(file, {
+        maxDimension: item.category === 'seo' ? 1200 : 1800,
+      });
+      await onUpdate(item, {
+        url: uploaded.url,
+        storagePath: uploaded.storagePath,
+        mimeType: uploaded.mimeType,
+        width: uploaded.width,
+        height: uploaded.height,
+        sizeBytes: uploaded.sizeBytes,
+      });
+    } catch (err) {
+      if (err instanceof StorageUploadError) {
+        setCardError(err.message);
+        setPendingReplaceFile(file);
+      } else {
+        setCardError(
+          err instanceof Error ? err.message : 'Unable to replace photograph.'
+        );
+      }
+    } finally {
+      setReplacing(false);
+    }
+  }
+
+  async function handleReplaceCompactFallback() {
+    if (!pendingReplaceFile) return;
+    const file = pendingReplaceFile;
+    setPendingReplaceFile(null);
+    setCardError('');
+    setReplacing(true);
+
+    try {
+      const optimized = await optimizeImageForMediaLibrary(file, {
+        maxDimension: item.category === 'seo' ? 1024 : 1200,
+        maxOutputChars: 220_000,
+      });
+      await onUpdate(item, {
+        url: optimized.dataUrl,
+        storagePath: '',
+        mimeType: optimized.mimeType,
+        width: optimized.width,
+        height: optimized.height,
+        sizeBytes: optimized.sizeBytes,
+      });
+    } catch (err) {
+      setCardError(
+        err instanceof Error ? err.message : 'Unable to replace photograph.'
+      );
+    } finally {
+      setReplacing(false);
+    }
   }
 
   return (
@@ -403,6 +555,11 @@ function MediaAssetCard({
           referrerPolicy="no-referrer"
           className="h-full w-full object-cover"
         />
+        {item.storagePath && (
+          <span className="absolute top-2 left-2 border border-[#D4AF37]/40 bg-[#080808]/90 px-2 py-0.5 text-[10px] font-semibold tracking-wider text-[#F2D675] uppercase">
+            Cloud CDN
+          </span>
+        )}
       </div>
 
       <div className="flex flex-1 flex-col justify-between p-5">
@@ -472,14 +629,14 @@ function MediaAssetCard({
                 onClick={() => {
                   onAssign(assignTarget, item.url);
                   setAssignedFeedback(true);
-                  window.setTimeout(() => setAssignedFeedback(false), 1800);
+                  window.setTimeout(() => setAssignedFeedback(false), 2200);
                 }}
-                className="inline-flex items-center gap-1 border border-[#D4AF37]/50 bg-[#080808] px-3 py-2 text-xs font-semibold text-[#F2D675] uppercase transition-colors hover:bg-[#D4AF37] hover:text-[#080808] shrink-0"
+                className="inline-flex shrink-0 items-center gap-1 border border-[#D4AF37]/50 bg-[#080808] px-3 py-2 text-xs font-semibold text-[#F2D675] uppercase transition-colors hover:bg-[#D4AF37] hover:text-[#080808]"
               >
                 {assignedFeedback ? (
                   <>
                     <Check className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>Applied</span>
+                    <span>In Draft</span>
                   </>
                 ) : (
                   <span>Apply</span>
@@ -487,20 +644,41 @@ function MediaAssetCard({
               </button>
             </div>
           </div>
+
+          {cardError && (
+            <div role="alert" className="border border-rose-500/40 bg-rose-950/30 p-2.5 text-[11px] text-rose-200">
+              <p>{cardError}</p>
+              {pendingReplaceFile && (
+                <button
+                  type="button"
+                  disabled={saving || replacing}
+                  onClick={() => void handleReplaceCompactFallback()}
+                  className="mt-2 inline-flex items-center bg-[#D4AF37] px-2.5 py-1 text-[10px] font-semibold tracking-wider text-[#080808] uppercase hover:bg-[#F2D675]"
+                >
+                  Use Compact Fallback Instead
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-4">
           <button
             type="button"
-            disabled={saving}
-            onClick={() =>
-              onUpdate(item, {
+            disabled={saving || replacing}
+            onClick={() => {
+              setCardError('');
+              void onUpdate(item, {
                 title: clampString(title || item.title, 120),
                 description: clampString(description, 400),
                 category,
-              })
-            }
-            className="inline-flex min-h-[36px] items-center gap-1.5 bg-[#D4AF37] px-3.5 py-1.5 text-xs font-semibold text-[#080808] uppercase hover:bg-[#F2D675]"
+              }).catch((err) => {
+                setCardError(
+                  err instanceof Error ? err.message : 'Unable to save details.'
+                );
+              });
+            }}
+            className="inline-flex min-h-[36px] items-center gap-1.5 bg-[#D4AF37] px-3.5 py-1.5 text-xs font-semibold text-[#080808] uppercase hover:bg-[#F2D675] disabled:opacity-50"
           >
             <Save className="h-3.5 w-3.5" aria-hidden="true" />
             <span>Save</span>
@@ -516,20 +694,20 @@ function MediaAssetCard({
             />
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || replacing}
               onClick={() => replaceInputRef.current?.click()}
               title="Replace photograph"
-              className="inline-flex min-h-[36px] items-center gap-1 border border-white/15 px-3 py-1.5 text-xs text-[#D4D4D0] hover:border-[#D4AF37]/60 hover:text-[#F2D675]"
+              className="inline-flex min-h-[36px] items-center gap-1 border border-white/15 px-3 py-1.5 text-xs text-[#D4D4D0] hover:border-[#D4AF37]/60 hover:text-[#F2D675] disabled:opacity-50"
             >
-              <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Replace</span>
+              <RefreshCw className={`h-3.5 w-3.5 ${replacing ? 'animate-spin' : ''}`} aria-hidden="true" />
+              <span>{replacing ? 'Replacing...' : 'Replace'}</span>
             </button>
             <button
               type="button"
-              disabled={saving}
-              onClick={() => onDelete(item.id)}
+              disabled={saving || replacing}
+              onClick={() => void onDelete(item.id)}
               title="Delete photograph"
-              className="inline-flex min-h-[36px] items-center gap-1 border border-white/15 px-3 py-1.5 text-xs text-[#B8B8B3] hover:border-rose-500/50 hover:text-rose-300"
+              className="inline-flex min-h-[36px] items-center gap-1 border border-white/15 px-3 py-1.5 text-xs text-[#B8B8B3] hover:border-rose-500/50 hover:text-rose-300 disabled:opacity-50"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>

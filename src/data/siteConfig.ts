@@ -111,6 +111,7 @@ export interface MediaItemRecord {
   description: string;
   category: MediaCategory;
   url: string;
+  storagePath?: string;
   mimeType: string;
   width: number;
   height: number;
@@ -755,7 +756,7 @@ export function normalizeSiteConfig(
   const rawHeroHeading =
     typeof merged.heroHeading === 'string' ? merged.heroHeading.trim() : '';
   const resolvedHeroHeading =
-    !rawHeroHeading || rawHeroHeading.toUpperCase() === 'MEHMOOD FAROOQ'
+    !rawHeroHeading
       ? DEFAULT_LIVE_CONTENT.heroHeading
       : rawHeroHeading;
 

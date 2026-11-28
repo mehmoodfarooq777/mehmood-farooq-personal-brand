@@ -2,6 +2,10 @@ import { useRef, useState, type ChangeEvent } from 'react';
 import { Check, Upload, X } from 'lucide-react';
 import type { MediaCategory, MediaItemRecord } from '../../data/siteConfig';
 import { optimizeImageForMediaLibrary } from '../../lib/imageOptimizer';
+import {
+  StorageUploadError,
+  uploadImageToStorage,
+} from '../../lib/storageMedia';
 
 interface MediaPickerModalProps {
   title: string;
@@ -14,6 +18,7 @@ interface MediaPickerModalProps {
     description: string;
     category: MediaCategory;
     url: string;
+    storagePath?: string;
     mimeType: string;
     width: number;
     height: number;
@@ -32,7 +37,9 @@ export function MediaPickerModal({
   onClose,
 }: MediaPickerModalProps) {
   const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [fallbackFile, setFallbackFile] = useState<File | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function handleQuickUpload(e: ChangeEvent<HTMLInputElement>) {
@@ -40,17 +47,61 @@ export function MediaPickerModal({
     if (!file) return;
     e.target.value = '';
     setError('');
+    setFallbackFile(null);
     setUploading(true);
+    setProgress(5);
+
+    try {
+      const uploaded = await uploadImageToStorage(file, {
+        maxDimension: defaultCategory === 'seo' ? 1200 : 1800,
+        onProgress: (pct) => setProgress(pct),
+      });
+      await onUploadMedia({
+        title: uploaded.suggestedTitle,
+        description: '',
+        category: defaultCategory,
+        url: uploaded.url,
+        storagePath: uploaded.storagePath,
+        mimeType: uploaded.mimeType,
+        width: uploaded.width,
+        height: uploaded.height,
+        sizeBytes: uploaded.sizeBytes,
+      });
+      onSelect(uploaded.url);
+      onClose();
+    } catch (err) {
+      if (err instanceof StorageUploadError) {
+        setError(err.message);
+        setFallbackFile(file);
+      } else {
+        setError(err instanceof Error ? err.message : 'Upload failed.');
+      }
+    } finally {
+      setUploading(false);
+      setProgress(null);
+    }
+  }
+
+  async function handleCompactFallbackUpload() {
+    if (!fallbackFile) return;
+    const file = fallbackFile;
+    setFallbackFile(null);
+    setError('');
+    setUploading(true);
+    setProgress(10);
 
     try {
       const optimized = await optimizeImageForMediaLibrary(file, {
-        maxDimension: defaultCategory === 'seo' ? 1200 : 1440,
+        maxDimension: defaultCategory === 'seo' ? 1024 : 1200,
+        maxOutputChars: 220_000,
+        onProgress: (pct) => setProgress(pct),
       });
       await onUploadMedia({
         title: optimized.suggestedTitle,
         description: '',
         category: defaultCategory,
         url: optimized.dataUrl,
+        storagePath: '',
         mimeType: optimized.mimeType,
         width: optimized.width,
         height: optimized.height,
@@ -62,6 +113,7 @@ export function MediaPickerModal({
       setError(err instanceof Error ? err.message : 'Upload failed.');
     } finally {
       setUploading(false);
+      setProgress(null);
     }
   }
 
@@ -95,10 +147,16 @@ export function MediaPickerModal({
               type="button"
               disabled={uploading}
               onClick={() => inputRef.current?.click()}
-              className="inline-flex min-h-[40px] items-center gap-2 bg-[#D4AF37] px-4 py-2 text-xs font-semibold tracking-wider text-[#080808] uppercase hover:bg-[#F2D675]"
+              className="inline-flex min-h-[40px] items-center gap-2 bg-[#D4AF37] px-4 py-2 text-xs font-semibold tracking-wider text-[#080808] uppercase hover:bg-[#F2D675] disabled:opacity-50"
             >
               <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>{uploading ? 'Uploading...' : 'Upload New'}</span>
+              <span>
+                {uploading
+                  ? progress !== null
+                    ? `Uploading ${progress}%`
+                    : 'Uploading...'
+                  : 'Upload New'}
+              </span>
             </button>
             <button
               type="button"
@@ -112,9 +170,19 @@ export function MediaPickerModal({
         </div>
 
         {error && (
-          <p role="alert" className="border-b border-rose-500/30 bg-rose-950/30 px-6 py-2.5 text-xs text-rose-300">
-            {error}
-          </p>
+          <div role="alert" className="border-b border-rose-500/30 bg-rose-950/30 px-6 py-3 text-xs text-rose-200">
+            <p>{error}</p>
+            {fallbackFile && (
+              <button
+                type="button"
+                disabled={uploading}
+                onClick={() => void handleCompactFallbackUpload()}
+                className="mt-2 inline-flex items-center bg-[#D4AF37] px-3 py-1.5 text-[11px] font-semibold tracking-wider text-[#080808] uppercase hover:bg-[#F2D675]"
+              >
+                Use Compact Database Fallback Instead
+              </button>
+            )}
+          </div>
         )}
 
         <div className="flex-1 overflow-y-auto p-6">

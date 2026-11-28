@@ -246,6 +246,7 @@
           "enum": ["profile", "hero", "about", "journey", "business", "blog", "seo", "general"]
         },
         "url": { "type": "string", "minLength": 1, "maxLength": 700000 },
+        "storagePath": { "type": "string", "minLength": 0, "maxLength": 400 },
         "mimeType": { "type": "string", "minLength": 1, "maxLength": 80 },
         "width": { "type": "number" },
         "height": { "type": "number" },

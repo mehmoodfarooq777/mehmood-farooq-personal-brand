@@ -9,7 +9,12 @@ import {
   type LiveSiteContent,
   type SocialProfile,
 } from '../data/siteConfig';
-import { db, handleFirestoreError, OperationType } from '../lib/firebase';
+import {
+  db,
+  extractReadableFirebaseError,
+  handleFirestoreError,
+  OperationType,
+} from '../lib/firebase';
 import { SocialIcon } from './SocialIcons';
 
 interface ConnectSectionProps {
@@ -116,7 +121,11 @@ export function ConnectSection({
       setSubject('');
       setMessage('');
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
+      try {
+        handleFirestoreError(error, OperationType.CREATE, path);
+      } catch (wrapped) {
+        setFormError(extractReadableFirebaseError(wrapped));
+      }
     } finally {
       setSubmitting(false);
     }

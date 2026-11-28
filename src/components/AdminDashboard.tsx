@@ -79,11 +79,19 @@ import {
   AUTHORIZED_ADMIN_EMAIL,
   configureAuthPersistence,
   db,
+  extractReadableFirebaseError,
+  FIREBASE_PROJECT_ID,
+  FIREBASE_STORAGE_BUCKET,
+  FIRESTORE_DATABASE_ID,
   handleFirestoreError,
   isAuthorizedAdminEmail,
   isAuthorizedAdminUser,
   OperationType,
 } from '../lib/firebase';
+import {
+  deleteStorageAsset,
+  probeStorageBucketReachable,
+} from '../lib/storageMedia';
 import { WelcomeIntro } from './WelcomeIntro';
 import { AccountSettingsTab } from './admin/AccountSettingsTab';
 import { AdminLogin } from './admin/AdminLogin';
@@ -140,6 +148,18 @@ const SESSION_PREF_KEY = 'mf_admin_remember_me';
 const IDLE_TIMEOUT_PREF_KEY = 'mf_admin_idle_minutes';
 const SESSION_START_KEY = 'mf_admin_session_start';
 
+function reportAndFormatFirestoreError(
+  err: unknown,
+  op: OperationType,
+  path: string | null
+): string {
+  try {
+    handleFirestoreError(err, op, path);
+  } catch (wrapped) {
+    return extractReadableFirebaseError(wrapped);
+  }
+}
+
 export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   const [authReady, setAuthReady] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -179,6 +199,16 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     useState<LiveSiteContent>(DEFAULT_LIVE_CONTENT);
   const [hasPublishedDoc, setHasPublishedDoc] = useState(false);
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false);
+  const [hasStagesChanges, setHasStagesChanges] = useState(false);
+  const [hasPrinciplesChanges, setHasPrinciplesChanges] = useState(false);
+  const [stagesSeededInDb, setStagesSeededInDb] = useState(false);
+  const [principlesSeededInDb, setPrinciplesSeededInDb] = useState(false);
+  const [lastDraftSavedAt, setLastDraftSavedAt] = useState('');
+  const [lastPublishedAt, setLastPublishedAt] = useState('');
+  const [storageStatus, setStorageStatus] = useState<
+    'checking' | 'ready' | 'unprovisioned'
+  >('checking');
+  const [refreshingWorkspace, setRefreshingWorkspace] = useState(false);
   const [showPublishConfirm, setShowPublishConfirm] = useState(false);
   const [showSitePreview, setShowSitePreview] = useState(false);
   const [previewWelcome, setPreviewWelcome] = useState(false);
@@ -215,6 +245,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   >('all');
 
   const [pickerState, setPickerState] = useState<PickerState | null>(null);
+
+  const hasPendingChanges =
+    hasUnpublishedChanges || hasStagesChanges || hasPrinciplesChanges;
 
   const isAuthorized = isAuthorizedAdminUser(user);
 
@@ -340,15 +373,16 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     };
   }, [isAuthorized, idleTimeoutMinutes, rememberMeActive, performSignOut]);
 
-  // Load CMS data only when verified administrator is authenticated
-  useEffect(() => {
-    if (!authReady || !isAuthorized || !user) {
-      return;
-    }
+  const loadAdminWorkspace = useCallback(
+    async (isManualRefresh = false) => {
+      if (!authReady || !isAuthorized || !user) {
+        return;
+      }
+      if (isManualRefresh) {
+        setRefreshingWorkspace(true);
+        setErrorMessage('');
+      }
 
-    let mounted = true;
-
-    async function loadAdminWorkspace() {
       try {
         const [
           draftSnap,
@@ -358,6 +392,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
           blogSnap,
           mediaSnap,
           versionsSnap,
+          bucketReachable,
         ] = await Promise.all([
           getDoc(doc(db, 'siteConfig', 'draft')),
           getDoc(doc(db, 'siteConfig', 'public')),
@@ -366,17 +401,30 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
           getDocs(collection(db, 'blogPosts')),
           getDocs(collection(db, 'mediaItems')),
           getDocs(collection(db, 'siteVersions')),
+          probeStorageBucketReachable(),
         ]);
 
-        if (!mounted) return;
+        setStorageStatus(bucketReachable ? 'ready' : 'unprovisioned');
 
         const publishedExists = publicSnap.exists();
         setHasPublishedDoc(publishedExists);
 
+        if (publishedExists) {
+          const updatedAt = (publicSnap.data() as { updatedAt?: { toDate?: () => Date } })
+            .updatedAt;
+          if (updatedAt?.toDate) {
+            setLastPublishedAt(updatedAt.toDate().toLocaleString());
+          }
+        }
+
         if (draftSnap.exists()) {
-          const normalizedDraft = normalizeSiteConfig(
-            draftSnap.data() as Record<string, unknown>
-          );
+          const draftRaw = draftSnap.data() as Record<string, unknown> & {
+            updatedAt?: { toDate?: () => Date };
+          };
+          if (draftRaw.updatedAt?.toDate) {
+            setLastDraftSavedAt(draftRaw.updatedAt.toDate().toLocaleString());
+          }
+          const normalizedDraft = normalizeSiteConfig(draftRaw);
           setDraftContent(normalizedDraft);
           if (publishedExists) {
             const publicStr = JSON.stringify(
@@ -397,6 +445,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         }
 
         if (!stagesSnap.empty) {
+          setStagesSeededInDb(true);
           setStages(
             stagesSnap.docs
               .map((d) => {
@@ -415,10 +464,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
               .sort((a, b) => a.order - b.order)
           );
         } else {
+          setStagesSeededInDb(false);
           setStages(SITE_CONFIG.journey.stages);
         }
+        setHasStagesChanges(false);
 
         if (!principlesSnap.empty) {
+          setPrinciplesSeededInDb(true);
           setPrinciples(
             principlesSnap.docs
               .map((d) => ({
@@ -428,8 +480,10 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
               .sort((a, b) => a.order - b.order)
           );
         } else {
+          setPrinciplesSeededInDb(false);
           setPrinciples(SITE_CONFIG.principles.items);
         }
+        setHasPrinciplesChanges(false);
 
         const loadedPosts: BlogPost[] = blogSnap.docs
           .map((d) => ({
@@ -465,12 +519,30 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         });
         loadedVersions.sort((a, b) => b.id.localeCompare(a.id));
         setVersions(loadedVersions);
+
+        if (isManualRefresh) {
+          setStatusMessage('Reloaded latest draft and published database state.');
+        }
       } catch (err) {
-        handleFirestoreError(err, OperationType.GET, 'siteConfig/draft');
+        setErrorMessage(
+          reportAndFormatFirestoreError(err, OperationType.GET, 'siteConfig/draft')
+        );
+      } finally {
+        if (isManualRefresh) {
+          setRefreshingWorkspace(false);
+        }
       }
+    },
+    [authReady, isAuthorized, user]
+  );
+
+  // Load CMS data only when verified administrator is authenticated
+  useEffect(() => {
+    if (!authReady || !isAuthorized || !user) {
+      return;
     }
 
-    void loadAdminWorkspace();
+    void loadAdminWorkspace(false);
 
     const unsubInquiries = onSnapshot(
       collection(db, 'inquiries'),
@@ -483,15 +555,16 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         setInquiries(items);
       },
       (err) => {
-        handleFirestoreError(err, OperationType.LIST, 'inquiries');
+        setErrorMessage(
+          reportAndFormatFirestoreError(err, OperationType.LIST, 'inquiries')
+        );
       }
     );
 
     return () => {
-      mounted = false;
       unsubInquiries();
     };
-  }, [authReady, isAuthorized, user]);
+  }, [authReady, isAuthorized, user, loadAdminWorkspace]);
 
   function showNotice(msg: string) {
     setErrorMessage('');
@@ -873,23 +946,43 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     if (snapshot.brandName.length < 2 || snapshot.heroHeading.length < 2) {
       return 'Brand name and Hero heading must each be at least 2 characters.';
     }
-    if (snapshot.tagline.length < 2 || snapshot.profession.length < 2) {
-      return 'Tagline and Profession title must each be at least 2 characters.';
+    if (
+      snapshot.tagline.length < 2 ||
+      snapshot.profession.length < 2 ||
+      snapshot.location.length < 2
+    ) {
+      return 'Tagline, Profession title, and Location must each be at least 2 characters.';
     }
     if (snapshot.heroDescription.length < 10) {
       return 'Hero description must be at least 10 characters.';
     }
-    if (snapshot.businessName.length < 2 || snapshot.businessCountry.length < 2 || snapshot.businessState.length < 2 || snapshot.businessIndustry.length < 2) {
-      return 'Company name, country, state, and industry must each be at least 2 characters.';
+    if (snapshot.aboutHeading.length < 2) {
+      return 'About section heading must be at least 2 characters.';
+    }
+    if (
+      snapshot.businessHeading.length < 2 ||
+      snapshot.businessName.length < 2 ||
+      snapshot.businessCountry.length < 2 ||
+      snapshot.businessState.length < 2 ||
+      snapshot.businessRegistration.length < 2 ||
+      snapshot.businessIndustry.length < 2
+    ) {
+      return 'Business heading, company name, country, state, and industry must each be at least 2 characters.';
     }
     if (snapshot.businessDescription.length < 10) {
       return 'Business description must be at least 10 characters.';
+    }
+    if (snapshot.connectHeading.length < 2) {
+      return 'Contact section heading must be at least 2 characters.';
     }
     if (snapshot.connectDescription.length < 10) {
       return 'Contact section description must be at least 10 characters.';
     }
     if (!EMAIL_REGEX.test(snapshot.publicEmail)) {
       return 'Public contact email must be a valid email address.';
+    }
+    if (snapshot.welcomeName.length < 2 || snapshot.welcomeTagline.length < 2) {
+      return 'Welcome animation name and tagline must each be at least 2 characters.';
     }
     if (!HEX_COLOR_REGEX.test(snapshot.welcomeBgColor)) {
       return 'Welcome background color must be a valid 6-digit hex code (e.g. #080808).';
@@ -905,6 +998,15 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     }
     if (snapshot.seoTitle.length < 2 || snapshot.seoDescription.length < 10) {
       return 'SEO title (2+ chars) and meta description (10+ chars) are required.';
+    }
+    if (snapshot.footerCopyright.length < 2) {
+      return 'Footer copyright text must be at least 2 characters.';
+    }
+    const approxBytes = new TextEncoder().encode(JSON.stringify(snapshot)).length;
+    if (approxBytes > 940_000) {
+      return `Combined website configuration exceeds Firestore’s 1 MB document limit (${Math.round(
+        approxBytes / 1024
+      )} KB). Upload large photographs through Firebase Storage instead of embedded data URLs.`;
     }
     return null;
   }
@@ -928,11 +1030,14 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         updatedAt: serverTimestamp(),
       });
       setDraftContent(snapshot);
+      setLastDraftSavedAt(new Date().toLocaleString());
       showNotice(
-        'Draft changes saved privately. Preview or click "Publish Changes" when ready to update the live website.'
+        'Draft saved to Firestore. Click "Publish Changes" when ready to push all updates live.'
       );
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'siteConfig/draft');
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'siteConfig/draft')
+      );
     } finally {
       setSaving(false);
     }
@@ -948,6 +1053,24 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     if (validationErr) {
       setErrorMessage(validationErr);
       return;
+    }
+
+    for (const s of stages) {
+      if (s.title.trim().length < 2 || s.description.trim().length < 5) {
+        setErrorMessage(
+          `Journey stage "${s.title || s.step}" needs a title (2+ chars) and description (5+ chars) before publishing.`
+        );
+        return;
+      }
+    }
+
+    for (const p of principles) {
+      if (p.title.trim().length < 2 || p.summary.trim().length < 5) {
+        setErrorMessage(
+          `Principle "${p.title || p.number}" needs a title (2+ chars) and summary (5+ chars) before publishing.`
+        );
+        return;
+      }
     }
 
     setSaving(true);
@@ -974,6 +1097,47 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         createdByUid: user.uid,
         createdAt: serverTimestamp(),
       });
+
+      let nextStages = stages;
+      if (hasStagesChanges || !stagesSeededInDb) {
+        nextStages = stages.map((stage, i) => ({
+          ...stage,
+          id: stage.id || `stage-${i + 1}`,
+        }));
+        for (const stage of nextStages) {
+          batch.set(doc(db, 'journeyStages', stage.id!), {
+            step: clampString(stage.step, 10) || '01',
+            order: Number(stage.order) || 1,
+            dateLabel: clampString(stage.dateLabel || '', 60),
+            title: clampString(stage.title, 100),
+            description: clampString(stage.description, 500),
+            imageUrl: clampString(stage.imageUrl || '', 700000),
+            isPublished: Boolean(stage.isPublished ?? true),
+            updatedByUid: user.uid,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
+      let nextPrinciples = principles;
+      if (hasPrinciplesChanges || !principlesSeededInDb) {
+        nextPrinciples = principles.map((item, i) => ({
+          ...item,
+          id: item.id || `principle-${i + 1}`,
+        }));
+        for (const item of nextPrinciples) {
+          batch.set(doc(db, 'principles', item.id!), {
+            number: clampString(item.number, 10) || '01',
+            order: Number(item.order) || 1,
+            title: clampString(item.title, 100),
+            summary: clampString(item.summary, 400),
+            isPublished: Boolean(item.isPublished ?? true),
+            updatedByUid: user.uid,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      }
+
       await batch.commit();
 
       applyDynamicSeoMetadata(
@@ -981,9 +1145,18 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         route,
         blogPosts.length > 0 ? blogPosts : DEFAULT_BLOG_POSTS
       );
+      const nowLabel = new Date().toLocaleString();
       setDraftContent(snapshot);
+      setStages(nextStages);
+      setPrinciples(nextPrinciples);
       setHasPublishedDoc(true);
+      setStagesSeededInDb(true);
+      setPrinciplesSeededInDb(true);
       setHasUnpublishedChanges(false);
+      setHasStagesChanges(false);
+      setHasPrinciplesChanges(false);
+      setLastDraftSavedAt(nowLabel);
+      setLastPublishedAt(nowLabel);
       setVersions((prev) => [
         {
           id: versionId,
@@ -996,7 +1169,40 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       ]);
       showNotice('Website changes published live and snapshot archived.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'siteConfig/public');
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'siteConfig/public')
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDiscardDraftLoadLive() {
+    if (!user || !isAuthorized) return;
+    setSaving(true);
+    setErrorMessage('');
+    try {
+      const publicSnap = await getDoc(doc(db, 'siteConfig', 'public'));
+      if (!publicSnap.exists()) {
+        setErrorMessage('No published website configuration exists yet.');
+        return;
+      }
+      const liveSnapshot = normalizeSiteConfig(
+        publicSnap.data() as Record<string, unknown>
+      );
+      await setDoc(doc(db, 'siteConfig', 'draft'), {
+        ...liveSnapshot,
+        updatedByUid: user.uid,
+        updatedAt: serverTimestamp(),
+      });
+      setDraftContent(liveSnapshot);
+      setHasUnpublishedChanges(false);
+      setLastDraftSavedAt(new Date().toLocaleString());
+      showNotice('Discarded unpublished draft changes and reloaded live published content.');
+    } catch (err) {
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'siteConfig/draft')
+      );
     } finally {
       setSaving(false);
     }
@@ -1090,7 +1296,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         showNotice('Default media library items are already initialized.');
       }
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'mediaItems');
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'mediaItems')
+      );
     } finally {
       setSaving(false);
     }
@@ -1102,6 +1310,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     description: string;
     category: MediaCategory;
     url: string;
+    storagePath?: string;
     mimeType: string;
     width: number;
     height: number;
@@ -1110,12 +1319,14 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     if (!user || !isAuthorized) return;
     const id = `media_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     setSaving(true);
+    setErrorMessage('');
     try {
       await setDoc(doc(db, 'mediaItems', id), {
         title: clampString(input.title, 120) || 'Photograph',
         description: clampString(input.description, 400),
         category: input.category,
         url: input.url,
+        storagePath: clampString(input.storagePath || '', 400),
         mimeType: clampString(input.mimeType, 80) || 'image/webp',
         width: Math.max(0, Math.round(input.width)),
         height: Math.max(0, Math.round(input.height)),
@@ -1131,6 +1342,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         description: clampString(input.description, 400),
         category: input.category,
         url: input.url,
+        storagePath: clampString(input.storagePath || '', 400),
         mimeType: input.mimeType,
         width: input.width,
         height: input.height,
@@ -1140,7 +1352,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       setMediaItems((prev) => [createdRecord, ...prev]);
       showNotice(`Uploaded "${createdRecord.title}" to Media Library.`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `mediaItems/${id}`);
+      const msg = reportAndFormatFirestoreError(
+        err,
+        OperationType.CREATE,
+        `mediaItems/${id}`
+      );
+      setErrorMessage(msg);
+      throw new Error(msg);
     } finally {
       setSaving(false);
     }
@@ -1152,6 +1370,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   ) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       const patch: Record<string, unknown> = {
         updatedAt: serverTimestamp(),
@@ -1168,6 +1387,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       if (updates.url !== undefined) {
         patch.url = updates.url;
       }
+      if (updates.storagePath !== undefined) {
+        patch.storagePath = clampString(updates.storagePath, 400);
+      }
       if (updates.mimeType !== undefined) {
         patch.mimeType = clampString(updates.mimeType, 80);
       }
@@ -1182,12 +1404,56 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       }
 
       await updateDoc(doc(db, 'mediaItems', item.id), patch);
+
+      if (
+        updates.url &&
+        updates.url !== item.url &&
+        item.storagePath &&
+        updates.storagePath !== item.storagePath
+      ) {
+        void deleteStorageAsset(item.storagePath);
+      }
+
+      // If this asset URL is currently assigned in draftContent, replace references automatically
+      if (updates.url && updates.url !== item.url) {
+        const oldUrl = item.url;
+        const newUrl = updates.url;
+        setDraftContent((prev) => {
+          let changed = false;
+          const next = { ...prev };
+          const slotKeys = [
+            'heroPortraitUrl',
+            'aboutWorkspaceUrl',
+            'businessShowcaseUrl',
+            'businessLogoUrl',
+            'seoOgImageUrl',
+            'seoFaviconUrl',
+          ] as const;
+          for (const key of slotKeys) {
+            if (next[key] === oldUrl) {
+              next[key] = newUrl;
+              changed = true;
+            }
+          }
+          if (changed) {
+            setHasUnpublishedChanges(true);
+          }
+          return changed ? next : prev;
+        });
+      }
+
       setMediaItems((prev) =>
         prev.map((m) => (m.id === item.id ? { ...m, ...updates } : m))
       );
       showNotice(`Updated media asset "${updates.title ?? item.title}".`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `mediaItems/${item.id}`);
+      const msg = reportAndFormatFirestoreError(
+        err,
+        OperationType.UPDATE,
+        `mediaItems/${item.id}`
+      );
+      setErrorMessage(msg);
+      throw new Error(msg);
     } finally {
       setSaving(false);
     }
@@ -1195,13 +1461,20 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
 
   async function handleDeleteMedia(id: string) {
     if (!user || !isAuthorized) return;
+    const target = mediaItems.find((m) => m.id === id);
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'mediaItems', id));
+      if (target?.storagePath) {
+        await deleteStorageAsset(target.storagePath);
+      }
       setMediaItems((prev) => prev.filter((m) => m.id !== id));
       showNotice('Photograph removed from Media Library.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `mediaItems/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.DELETE, `mediaItems/${id}`)
+      );
     } finally {
       setSaving(false);
     }
@@ -1212,7 +1485,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       ...draftContent,
       [target]: url,
     });
-    showNotice('Assigned photograph to draft configuration. Save or Publish to go live.');
+    showNotice('Assigned photograph to draft configuration. Save Draft or Publish Changes to update the live site.');
   }
 
   // Journey CRUD + Reorder
@@ -1227,26 +1500,53 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
 
     const id = stage.id || `stage_${Date.now()}`;
     setSaving(true);
+    setErrorMessage('');
     try {
-      await setDoc(doc(db, 'journeyStages', id), {
-        step: clampString(stage.step, 10) || '01',
-        order: Number(stage.order) || 1,
-        dateLabel: clampString(stage.dateLabel || '', 60),
-        title: clampString(stage.title, 100),
-        description: clampString(stage.description, 500),
-        imageUrl: clampString(stage.imageUrl || '', 700000),
-        isPublished: Boolean(stage.isPublished ?? true),
-        updatedByUid: user.uid,
-        updatedAt: serverTimestamp(),
-      });
-      setStages((prev) =>
-        prev
-          .map((s) => (s.id === stage.id ? { ...stage, id } : s))
-          .sort((a, b) => a.order - b.order)
-      );
+      if (!stagesSeededInDb) {
+        const batch = writeBatch(db);
+        const seeded = stages.map((s, i) =>
+          s.id === stage.id ? { ...stage, id: s.id || id } : { ...s, id: s.id || `stage-${i + 1}` }
+        );
+        for (const s of seeded) {
+          batch.set(doc(db, 'journeyStages', s.id!), {
+            step: clampString(s.step, 10) || '01',
+            order: Number(s.order) || 1,
+            dateLabel: clampString(s.dateLabel || '', 60),
+            title: clampString(s.title, 100),
+            description: clampString(s.description, 500),
+            imageUrl: clampString(s.imageUrl || '', 700000),
+            isPublished: Boolean(s.isPublished ?? true),
+            updatedByUid: user.uid,
+            updatedAt: serverTimestamp(),
+          });
+        }
+        await batch.commit();
+        setStages(seeded.sort((a, b) => a.order - b.order));
+        setStagesSeededInDb(true);
+      } else {
+        await setDoc(doc(db, 'journeyStages', id), {
+          step: clampString(stage.step, 10) || '01',
+          order: Number(stage.order) || 1,
+          dateLabel: clampString(stage.dateLabel || '', 60),
+          title: clampString(stage.title, 100),
+          description: clampString(stage.description, 500),
+          imageUrl: clampString(stage.imageUrl || '', 700000),
+          isPublished: Boolean(stage.isPublished ?? true),
+          updatedByUid: user.uid,
+          updatedAt: serverTimestamp(),
+        });
+        setStages((prev) =>
+          prev
+            .map((s) => (s.id === stage.id ? { ...stage, id } : s))
+            .sort((a, b) => a.order - b.order)
+        );
+      }
+      setHasStagesChanges(false);
       showNotice(`Saved timeline entry "${stage.title}".`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `journeyStages/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, `journeyStages/${id}`)
+      );
     } finally {
       setSaving(false);
     }
@@ -1270,6 +1570,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
 
     setStages(normalized);
     setSaving(true);
+    setErrorMessage('');
     try {
       const batch = writeBatch(db);
       for (const s of normalized) {
@@ -1286,9 +1587,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
         });
       }
       await batch.commit();
+      setStagesSeededInDb(true);
+      setHasStagesChanges(false);
       showNotice('Timeline order updated.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'journeyStages');
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'journeyStages')
+      );
     } finally {
       setSaving(false);
     }
@@ -1345,7 +1650,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       });
       showNotice('Added new timeline entry.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `journeyStages/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.CREATE,
+          `journeyStages/${id}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1354,12 +1665,19 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   async function handleDeleteStage(stageId: string) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'journeyStages', stageId));
       setStages((prev) => prev.filter((s) => s.id !== stageId));
       showNotice('Removed timeline entry.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `journeyStages/${stageId}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.DELETE,
+          `journeyStages/${stageId}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1375,24 +1693,49 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
 
     const id = item.id || `principle_${Date.now()}`;
     setSaving(true);
+    setErrorMessage('');
     try {
-      await setDoc(doc(db, 'principles', id), {
-        number: clampString(item.number, 10) || '01',
-        order: Number(item.order) || 1,
-        title: clampString(item.title, 100),
-        summary: clampString(item.summary, 400),
-        isPublished: Boolean(item.isPublished ?? true),
-        updatedByUid: user.uid,
-        updatedAt: serverTimestamp(),
-      });
-      setPrinciples((prev) =>
-        prev
-          .map((p) => (p.id === item.id ? { ...item, id } : p))
-          .sort((a, b) => a.order - b.order)
-      );
+      if (!principlesSeededInDb) {
+        const batch = writeBatch(db);
+        const seeded = principles.map((p, i) =>
+          p.id === item.id ? { ...item, id: p.id || id } : { ...p, id: p.id || `principle-${i + 1}` }
+        );
+        for (const p of seeded) {
+          batch.set(doc(db, 'principles', p.id!), {
+            number: clampString(p.number, 10) || '01',
+            order: Number(p.order) || 1,
+            title: clampString(p.title, 100),
+            summary: clampString(p.summary, 400),
+            isPublished: Boolean(p.isPublished ?? true),
+            updatedByUid: user.uid,
+            updatedAt: serverTimestamp(),
+          });
+        }
+        await batch.commit();
+        setPrinciples(seeded.sort((a, b) => a.order - b.order));
+        setPrinciplesSeededInDb(true);
+      } else {
+        await setDoc(doc(db, 'principles', id), {
+          number: clampString(item.number, 10) || '01',
+          order: Number(item.order) || 1,
+          title: clampString(item.title, 100),
+          summary: clampString(item.summary, 400),
+          isPublished: Boolean(item.isPublished ?? true),
+          updatedByUid: user.uid,
+          updatedAt: serverTimestamp(),
+        });
+        setPrinciples((prev) =>
+          prev
+            .map((p) => (p.id === item.id ? { ...item, id } : p))
+            .sort((a, b) => a.order - b.order)
+        );
+      }
+      setHasPrinciplesChanges(false);
       showNotice(`Saved principle "${item.title}".`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `principles/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, `principles/${id}`)
+      );
     } finally {
       setSaving(false);
     }
@@ -1412,6 +1755,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
     const id = `principle_${Date.now()}`;
     const orderNum = Number(newPrinciple.order) || principles.length + 1;
     setSaving(true);
+    setErrorMessage('');
     try {
       await setDoc(doc(db, 'principles', id), {
         number:
@@ -1446,7 +1790,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       });
       showNotice('Added new principle.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, `principles/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.CREATE,
+          `principles/${id}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1455,12 +1805,19 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   async function handleDeletePrinciple(principleId: string) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'principles', principleId));
       setPrinciples((prev) => prev.filter((p) => p.id !== principleId));
       showNotice('Removed principle.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `principles/${principleId}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.DELETE,
+          `principles/${principleId}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1525,7 +1882,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       });
       showNotice(`Saved article "${savedRecord.title}".`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `blogPosts/${id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, `blogPosts/${id}`)
+      );
     } finally {
       setSaving(false);
     }
@@ -1534,12 +1893,19 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   async function handleDeleteBlogPost(postId: string) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'blogPosts', postId));
       setBlogPosts((prev) => prev.filter((p) => p.id !== postId));
       showNotice('Deleted article.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `blogPosts/${postId}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.DELETE,
+          `blogPosts/${postId}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1593,7 +1959,9 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       setBlogPosts(reloaded);
       showNotice(`Synced ${missing.length} starter article(s) to database.`);
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, 'blogPosts');
+      setErrorMessage(
+        reportAndFormatFirestoreError(err, OperationType.WRITE, 'blogPosts')
+      );
     } finally {
       setSaving(false);
     }
@@ -1607,6 +1975,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   ) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await updateDoc(doc(db, 'inquiries', inquiry.id), {
         status: nextStatus,
@@ -1615,7 +1984,13 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
       });
       showNotice('Inquiry updated.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, `inquiries/${inquiry.id}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.UPDATE,
+          `inquiries/${inquiry.id}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1624,11 +1999,18 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   async function handleDeleteInquiry(inquiryId: string) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'inquiries', inquiryId));
       showNotice('Inquiry deleted.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `inquiries/${inquiryId}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.DELETE,
+          `inquiries/${inquiryId}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1648,12 +2030,19 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
   async function handleDeleteVersion(versionId: string) {
     if (!user || !isAuthorized) return;
     setSaving(true);
+    setErrorMessage('');
     try {
       await deleteDoc(doc(db, 'siteVersions', versionId));
       setVersions((prev) => prev.filter((v) => v.id !== versionId));
       showNotice('Deleted version snapshot.');
     } catch (err) {
-      handleFirestoreError(err, OperationType.DELETE, `siteVersions/${versionId}`);
+      setErrorMessage(
+        reportAndFormatFirestoreError(
+          err,
+          OperationType.DELETE,
+          `siteVersions/${versionId}`
+        )
+      );
     } finally {
       setSaving(false);
     }
@@ -1900,9 +2289,12 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
               </button>
               <div>
                 <p className="text-[11px] font-semibold tracking-[0.18em] text-[#D4AF37] uppercase">
-                  {hasUnpublishedChanges ? 'Draft Modified' : 'Live & Synced'}
+                  {hasPendingChanges ? 'Draft Pending Publish' : 'Live & Synced'}
                 </p>
-                <p className="text-xs text-[#9E9E98]">{user?.email}</p>
+                <p className="text-xs text-[#9E9E98]">
+                  {user?.email}
+                  {lastPublishedAt ? ` · Live since ${lastPublishedAt}` : ''}
+                </p>
               </div>
             </div>
 
@@ -1913,7 +2305,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                 className="inline-flex min-h-[40px] items-center gap-2 border border-white/20 bg-[#151515] px-4 py-2 text-xs font-semibold tracking-wider text-[#F5F5F4] uppercase transition-colors hover:border-[#D4AF37] hover:text-[#F2D675]"
               >
                 <Eye className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>Preview Website</span>
+                <span>Preview Draft</span>
               </button>
 
               <button
@@ -1923,7 +2315,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                 className="inline-flex min-h-[40px] items-center gap-2 border border-[#D4AF37]/60 bg-[#080808] px-4 py-2 text-xs font-semibold tracking-wider text-[#F2D675] uppercase transition-colors hover:bg-[#1E1E1E] disabled:opacity-50"
               >
                 <Save className="h-3.5 w-3.5" aria-hidden="true" />
-                <span>{saving ? 'Saving...' : 'Save Changes'}</span>
+                <span>{saving ? 'Saving...' : 'Save Draft'}</span>
               </button>
 
               <button
@@ -1983,12 +2375,12 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                       Publishing Status
                     </p>
                     <p className="mt-3 font-display text-2xl font-semibold text-[#F2D675]">
-                      {hasUnpublishedChanges ? 'Draft Pending' : 'Live & Synced'}
+                      {hasPendingChanges ? 'Draft Pending' : 'Live & Synced'}
                     </p>
                     <p className="mt-1 text-xs text-[#8C8C86]">
                       {hasPublishedDoc
-                        ? 'Public site serving published copy'
-                        : 'Ready for first publish'}
+                        ? 'Public site serving published Firestore copy'
+                        : 'Not yet published — click Publish Changes'}
                     </p>
                   </div>
 
@@ -2079,21 +2471,78 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                   <section className="flex flex-col justify-between border border-[#D4AF37]/25 bg-[#151515] p-6 lg:col-span-4">
                     <div>
                       <h2 className="font-display text-2xl font-semibold text-[#F5F5F4]">
-                        Media & Baseline Sync
+                        Database & Storage Sync
                       </h2>
-                      <p className="mt-2 text-xs leading-relaxed text-[#9E9E98]">
-                        Register bundled executive images in your Media Library without overwriting saved edits or custom uploads.
-                      </p>
+                      <dl className="mt-3 space-y-2 text-xs text-[#B8B8B3]">
+                        <div className="flex justify-between gap-2 border-b border-white/10 pb-1.5">
+                          <dt className="text-[#8C8C86]">Project</dt>
+                          <dd className="font-mono text-[#F5F5F4]">{FIREBASE_PROJECT_ID}</dd>
+                        </div>
+                        <div className="flex justify-between gap-2 border-b border-white/10 pb-1.5">
+                          <dt className="text-[#8C8C86]">Database</dt>
+                          <dd className="truncate font-mono text-[#F5F5F4]" title={FIRESTORE_DATABASE_ID}>
+                            {hasPublishedDoc ? 'Live Doc Active' : 'Defaults Only'}
+                          </dd>
+                        </div>
+                        <div className="flex justify-between gap-2 border-b border-white/10 pb-1.5">
+                          <dt className="text-[#8C8C86]">Last Draft Save</dt>
+                          <dd className="text-right text-[#F5F5F4]">{lastDraftSavedAt || 'Not saved yet'}</dd>
+                        </div>
+                        <div className="flex justify-between gap-2">
+                          <dt className="text-[#8C8C86]">Storage Bucket</dt>
+                          <dd
+                            title={FIREBASE_STORAGE_BUCKET}
+                            className={
+                              storageStatus === 'ready'
+                                ? 'font-semibold text-emerald-400'
+                                : storageStatus === 'unprovisioned'
+                                  ? 'font-semibold text-amber-300'
+                                  : 'text-[#8C8C86]'
+                            }
+                          >
+                            {storageStatus === 'ready'
+                              ? 'Active'
+                              : storageStatus === 'unprovisioned'
+                                ? 'Needs Console Setup'
+                                : 'Checking...'}
+                          </dd>
+                        </div>
+                      </dl>
                     </div>
-                    <button
-                      type="button"
-                      disabled={saving}
-                      onClick={handleInitializeMissingAssets}
-                      className="mt-6 inline-flex min-h-[42px] w-full items-center justify-center gap-2 border border-[#D4AF37]/50 bg-[#080808] px-4 py-2.5 text-xs font-semibold tracking-wider text-[#F2D675] uppercase transition-colors hover:bg-[#D4AF37] hover:text-[#080808] disabled:opacity-50"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>Sync Missing Default Media</span>
-                    </button>
+
+                    <div className="mt-5 space-y-2.5">
+                      <button
+                        type="button"
+                        disabled={saving || refreshingWorkspace}
+                        onClick={() => void loadAdminWorkspace(true)}
+                        className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 border border-white/15 bg-[#080808] px-4 py-2 text-xs font-semibold tracking-wider text-[#F5F5F4] uppercase transition-colors hover:border-[#D4AF37] hover:text-[#F2D675] disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${refreshingWorkspace ? 'animate-spin' : ''}`} aria-hidden="true" />
+                        <span>{refreshingWorkspace ? 'Refreshing...' : 'Refresh from Database'}</span>
+                      </button>
+
+                      {hasPublishedDoc && hasPendingChanges && (
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => void handleDiscardDraftLoadLive()}
+                          className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 border border-rose-500/40 bg-[#080808] px-4 py-2 text-xs font-semibold tracking-wider text-rose-200 uppercase transition-colors hover:border-rose-400 disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+                          <span>Discard Draft & Load Live</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={handleInitializeMissingAssets}
+                        className="inline-flex min-h-[40px] w-full items-center justify-center gap-2 border border-[#D4AF37]/50 bg-[#080808] px-4 py-2 text-xs font-semibold tracking-wider text-[#F2D675] uppercase transition-colors hover:bg-[#D4AF37] hover:text-[#080808] disabled:opacity-50"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
+                        <span>Sync Missing Default Media</span>
+                      </button>
+                    </div>
                   </section>
                 </div>
               </div>
@@ -2146,11 +2595,12 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                       <PrincipleCardEditor
                         key={item.id || idx}
                         item={item}
-                        onUpdateLocal={(next) =>
+                        onUpdateLocal={(next) => {
                           setPrinciples((prev) =>
                             prev.map((p, i) => (i === idx ? next : p))
-                          )
-                        }
+                          );
+                          setHasPrinciplesChanges(true);
+                        }}
                         onSave={() => handleSavePrinciple(item)}
                         onDelete={
                           item.id
@@ -2244,6 +2694,7 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
               <MediaLibraryTab
                 mediaItems={mediaItems}
                 saving={saving}
+                storageStatus={storageStatus}
                 onUploadMedia={handleUploadMedia}
                 onUpdateMedia={handleUpdateMedia}
                 onDeleteMedia={handleDeleteMedia}
@@ -2262,11 +2713,12 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                       idx={idx}
                       total={stages.length}
                       onMove={handleMoveStage}
-                      onUpdateLocal={(next) =>
+                      onUpdateLocal={(next) => {
                         setStages((prev) =>
                           prev.map((s, i) => (i === idx ? next : s))
-                        )
-                      }
+                        );
+                        setHasStagesChanges(true);
+                      }}
                       onSave={() => handleSaveStage(stage)}
                       onDelete={
                         stage.id ? () => handleDeleteStage(stage.id!) : undefined
@@ -2276,12 +2728,14 @@ export function AdminDashboard({ route, onNavigate }: AdminDashboardProps) {
                           `Timeline Image — ${stage.title || 'Stage'}`,
                           'journey',
                           stage.imageUrl,
-                          (url) =>
+                          (url) => {
                             setStages((prev) =>
                               prev.map((s, i) =>
                                 i === idx ? { ...s, imageUrl: url } : s
                               )
-                            )
+                            );
+                            setHasStagesChanges(true);
+                          }
                         )
                       }
                     />

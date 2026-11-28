@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Briefcase } from 'lucide-react';
 
 interface ExecutiveImageProps {
@@ -23,6 +23,10 @@ export function ExecutiveImage({
   fallbackTitle,
 }: ExecutiveImageProps) {
   const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
 
   if (hasError || !src) {
     return (

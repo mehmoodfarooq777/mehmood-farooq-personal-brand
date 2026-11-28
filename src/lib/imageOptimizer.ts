@@ -21,7 +21,7 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 
 const MAX_INPUT_BYTES = 10 * 1024 * 1024; // 10 MB upload limit
-const MAX_OUTPUT_CHARS = 650_000; // Safe headroom under Firestore 1 MB document limit
+const DEFAULT_MAX_OUTPUT_CHARS = 220_000; // Safe headroom if fallback DB storage is used across multiple slots
 
 export function validateImageFile(file: File): string | null {
   if (!ALLOWED_MIME_TYPES.has(file.type)) {
@@ -70,6 +70,7 @@ export async function optimizeImageForMediaLibrary(
   file: File,
   options?: {
     maxDimension?: number;
+    maxOutputChars?: number;
     onProgress?: (pct: number) => void;
   }
 ): Promise<OptimizedImageResult> {
@@ -78,6 +79,7 @@ export async function optimizeImageForMediaLibrary(
     throw new Error(validationError);
   }
 
+  const maxOutputChars = options?.maxOutputChars ?? DEFAULT_MAX_OUTPUT_CHARS;
   const onProgress = options?.onProgress;
   onProgress?.(5);
 
@@ -92,8 +94,8 @@ export async function optimizeImageForMediaLibrary(
 
   // Keep small SVG assets directly if within limit
   if (file.type === 'image/svg+xml') {
-    if (rawDataUrl.length > MAX_OUTPUT_CHARS) {
-      throw new Error('SVG file is too large after encoding.');
+    if (rawDataUrl.length > maxOutputChars) {
+      throw new Error('SVG file is too large for compact database fallback.');
     }
     onProgress?.(90);
     return {
@@ -109,14 +111,14 @@ export async function optimizeImageForMediaLibrary(
   const img = await loadImageElement(rawDataUrl);
   onProgress?.(60);
 
-  let maxDim = options?.maxDimension ?? 1440;
-  let quality = 0.84;
+  let maxDim = options?.maxDimension ?? 1280;
+  let quality = 0.8;
   let outputDataUrl = '';
   let targetWidth = img.naturalWidth || 1200;
   let targetHeight = img.naturalHeight || 900;
 
   // Iteratively optimize to guarantee payload fits cleanly inside Firestore limits
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 7; attempt++) {
     const ratio = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
     targetWidth = Math.max(1, Math.round(img.naturalWidth * ratio));
     targetHeight = Math.max(1, Math.round(img.naturalHeight * ratio));
@@ -135,17 +137,17 @@ export async function optimizeImageForMediaLibrary(
       ? webpUrl
       : canvas.toDataURL('image/jpeg', quality);
 
-    if (outputDataUrl.length <= MAX_OUTPUT_CHARS) {
+    if (outputDataUrl.length <= maxOutputChars) {
       break;
     }
 
     maxDim = Math.round(maxDim * 0.78);
-    quality = Math.max(0.55, quality - 0.1);
+    quality = Math.max(0.45, quality - 0.08);
   }
 
-  if (outputDataUrl.length > MAX_OUTPUT_CHARS) {
+  if (outputDataUrl.length > maxOutputChars) {
     throw new Error(
-      'Unable to compress photograph under the free-tier storage limit. Try a smaller image.'
+      'Unable to compress photograph under the compact database fallback limit. Enable Firebase Storage or choose a smaller image.'
     );
   }
 
